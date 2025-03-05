@@ -8,6 +8,7 @@
 #define TRX_TIMEOUT 100
 #define MB_Broadcast_ID 0x00
 #define REPORT_UID_DELAY_FACTOR 100
+#define MAX_SENSOR_NUM 256
 
 extern uint8_t rx_buf[];
 extern uint8_t tx_buf[];

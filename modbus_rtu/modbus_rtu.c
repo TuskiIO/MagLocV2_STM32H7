@@ -9,6 +9,7 @@ uint8_t rx_buf[RX_BUF_SIZE] __attribute__((section(".RxLpuart")));
 uint8_t tx_buf[TX_BUF_SIZE] __attribute__((section(".TxLpuart")));
 uint16_t rx_size = 0;
 uint16_t sensor_num = 0;
+uint8_t *sensor_UID[MAX_SENSOR_NUM];
 
 static osSemaphoreId_t modbusSemaphoreHandle = NULL;
 const osSemaphoreAttr_t modbusSemaphore_attr = {
@@ -206,45 +207,24 @@ HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UIDCRC8_lower, uint8_t
     HAL_UART_Transmit(&hlpuart1, txFrame, sizeof(txFrame), TRX_TIMEOUT);
     sensor_num = 0;
 
-    uint8_t rxFrame,rxSize;
-    /* 至少一个Sensor */
-    if (osSemaphoreAcquire(modbusSemaphoreHandle, delay_higher*REPORT_UID_DELAY_FACTOR) != osOK){
-        return HAL_TIMEOUT;
+    uint8_t rxFrame[RX_BUF_SIZE];
+    while(osSemaphoreAcquire(modbusSemaphoreHandle, delay_higher*REPORT_UID_DELAY_FACTOR) == osOK){
+        memcpy(rxFrame, rx_buf, rx_size);
+
+        /* 预期响应帧长度: slaveId + func + UID数据(return_UID_length) + CRC(2) */
+        if (rx_size != 1+1+return_UID_length+2){
+            break;
+        }
+        crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)rxFrame, rx_size - 2);
+        uint16_t recvCRC = rxFrame[rx_size - 2] | (rxFrame[rx_size - 1] << 8);
+        if (crc != recvCRC){
+            break;
+        }
+        
+        sensor_UID[sensor_num] = (uint8_t *)malloc(return_UID_length);
+        memcpy(sensor_UID[sensor_num],&rxFrame[2],return_UID_length);
+        sensor_num++;
     }
-    rxSize = rx_size;
-    memcpy(rxFrame,rx_buf, rxSize);
-
-    /* 预期响应帧长度: slaveId + func + UID数据(return_UID_length) + CRC(2) */
-    if (rxSize != 1+1+return_UID_length+2){
-        return HAL_ERROR;
-    }
-
-    crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)rxFrame, rxSize - 2);
-    uint16_t recvCRC = rxFrame[rxSize - 2] | (rxFrame[rxSize - 1] << 8);
-    if (crc != recvCRC){
-        return HAL_ERROR;
-    }
-
-    sensor_num++;
-
-    
-    // //uint16_t rxLen = 1 + 1 + return_UID_length + 2;
-
-    // uint8_t rxFrame[256] = {0};
-    // //Modbus_Master_SendReceive(txFrame, sizeof(txFrame), rxFrame);
-    // HAL_UART_Transmit(&hlpuart1, txFrame, sizeof(txFrame), TRX_TIMEOUT);
-
-    // if (rxFrame[0] != slaveId || rxFrame[1] != 0x61)
-    // {
-    //     return HAL_ERROR;
-    // }
-    // crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)rxFrame, rxLen - 2);
-    // uint16_t recvCRC = rxFrame[rxLen - 2] | (rxFrame[rxLen - 1] << 8);
-    // if (crc != recvCRC)
-    // {
-    //     return HAL_ERROR;
-    // }
-
     
     return HAL_OK;
 }
