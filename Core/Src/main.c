@@ -26,7 +26,8 @@
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "modbus_rtu.h"
-#include "sensor_data.h"
+#include "mag_sensor.h"
+#include "ICM42688P.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -157,7 +158,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
 
-
+  ICM42688_Init();
   HAL_Delay(500);
   HAL_ADCEx_Calibration_Start(&hadc3,ADC_CALIB_OFFSET,ADC_SINGLE_ENDED);
   HAL_Delay(500);
@@ -364,32 +365,12 @@ static void MX_CRC_Init(void)
   /* USER CODE BEGIN CRC_Init 2 */
 
 /*** 
-  hcrc16.Instance = CRC;
-  hcrc16.Init.DefaultPolynomialUse = DEFAULT_POLYNOMIAL_DISABLE;
-  hcrc16.Init.DefaultInitValueUse = DEFAULT_INIT_VALUE_ENABLE;
   hcrc16.Init.GeneratingPolynomial = 0x8005; // X^16 + X^15 + X^2 + 1
   hcrc16.Init.CRCLength = CRC_POLYLENGTH_16B;
-  hcrc16.Init.InputDataInversionMode = CRC_INPUTDATA_INVERSION_BYTE;
-  hcrc16.Init.OutputDataInversionMode = CRC_OUTPUTDATA_INVERSION_ENABLE;
-  hcrc16.InputDataFormat = CRC_INPUTDATA_FORMAT_BYTES;
-  if (HAL_CRC_Init(&hcrc16) != HAL_OK)
-  {
-    Error_Handler();
-  }
 
-  hcrc32.Instance = CRC;
-  hcrc32.Init.DefaultPolynomialUse = DEFAULT_POLYNOMIAL_DISABLE;
-  hcrc32.Init.DefaultInitValueUse = DEFAULT_INIT_VALUE_ENABLE;
   hcrc32.Init.GeneratingPolynomial = 0x04C11DB7U;  //  X^32 + X^26 + X^23 + X^22 + X^16 + X^12 + X^11 + X^10 + X^8 + X^7 + X^5 + X^4 + X^2 + X + 1
   hcrc32.Init.CRCLength = CRC_POLYLENGTH_32B;
-  hcrc32.Init.InputDataInversionMode = CRC_INPUTDATA_INVERSION_BYTE;
-  hcrc32.Init.OutputDataInversionMode = CRC_OUTPUTDATA_INVERSION_ENABLE;
-  hcrc32.InputDataFormat = CRC_INPUTDATA_FORMAT_BYTES;
-  if (HAL_CRC_Init(&hcrc32) != HAL_OK)
-  {
-    Error_Handler();
-  } 
-  ***/
+***/
 
   /* USER CODE END CRC_Init 2 */
 
@@ -461,7 +442,7 @@ static void MX_SPI3_Init(void)
   hspi3.Instance = SPI3;
   hspi3.Init.Mode = SPI_MODE_MASTER;
   hspi3.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi3.Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_HARD_OUTPUT;
@@ -782,11 +763,20 @@ void StartModbusTask(void *argument)
 {
   /* USER CODE BEGIN StartModbusTask */
 
+  //清空rx_buf,开启DMA空闲中断接收
+  //SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
   __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);
 
+  HAL_StatusTypeDef state=Get_MagSensors_Plugged();
+  while(state == HAL_OK){
+    state=Get_MagSensors_Plugged();
+  };
+  usb_printf("Plugged sensor number: %d\n", sensor_num);
+
   for (;;){
-    Modbus_CMD50_ReadBytes(0x01,0x00,0x04);
+    //Modbus_CMD50_ReadBytes(0x01,0x00,0x04);
+    //Get_MagSensors_Data();
     osDelay(100);
   }
 
