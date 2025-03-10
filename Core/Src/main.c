@@ -762,6 +762,7 @@ void StartAdcTask(void *argument)
 void StartModbusTask(void *argument)
 {
   /* USER CODE BEGIN StartModbusTask */
+  uint8_t current_sensor_num;
 
   //清空rx_buf,开启DMA空闲中断接收
   //SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
@@ -774,9 +775,24 @@ void StartModbusTask(void *argument)
   };
   usb_printf("Plugged sensor number: %d\n", sensor_num);
 
+  //更新配置
+  for(uint8_t i=0; i<sensor_num; i++){
+    Get_MagSensors_Config(i);
+  }
+
   for (;;){
     //Modbus_CMD50_ReadBytes(0x01,0x00,0x04);
-    //Get_MagSensors_Data();
+    Get_MagSensors_Data();
+
+
+    //检测新添加的传感器，增加检测uid会等待较短时间ADD_GETUID_DELAY_TIME*REPORT_UID_DELAY_FACTOR=10*100ms
+    current_sensor_num=sensor_num;
+    if(Get_MagSensors_Plugged() == HAL_OK){
+      for(uint8_t i=current_sensor_num; i<sensor_num; i++){
+        Get_MagSensors_Config(i);
+      }
+    };
+
     osDelay(100);
   }
 

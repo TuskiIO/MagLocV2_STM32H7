@@ -81,7 +81,7 @@ typedef struct{
 #pragma pack() //align memory allocation with default strategy
 
 /**
- * @brief  将所有默认地址的传感器分配slaveID，并修改全局变量sensor_num，将slaveID保存在MAG_SENSOR_Config_t中
+ * @brief  将所有默认地址的传感器分配slaveID，并修改全局变量sensor_num，将slaveID保存在MAG_SENSOR_Config_t中，初次检测会等待更长时间
  * @retval HAL_OK       检测到新传感器，并完成分配
  * @retval HAL_TIMEOUT  未检测到传感器
  * @retval HAL_ERROR    其他错误
@@ -89,8 +89,16 @@ typedef struct{
  HAL_StatusTypeDef Get_MagSensors_Plugged(void);
 
 /**
- * @brief  将所有默认地址的传感器分配slaveID，并修改全局变量sensor_num，将slaveID保存在MAG_SENSOR_Config_t中
- * @retval HAL_OK       检测到新传感器
+ * @brief  将单个传感器配置FULL_CFG_t更新
+ * @param  sensor_idx: 传感器索引
+ * @retval HAL_OK
+ * @retval HAL_ERROR
+ */
+ HAL_StatusTypeDef Get_MagSensors_Config(uint8_t sensor_idx);
+ 
+/**
+ * @brief  TriggerMeasure后将所有传感器数据更新到MAG_SENSOR_module_t中
+ * @retval HAL_OK       
  */
  HAL_StatusTypeDef Get_MagSensors_Data(void);
 
