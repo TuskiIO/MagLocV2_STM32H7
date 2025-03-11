@@ -28,6 +28,7 @@
 #include "modbus_rtu.h"
 #include "mag_sensor.h"
 #include "ICM42688P.h"
+#include "sensor_DHCP.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -746,7 +747,9 @@ void StartAdcTask(void *argument)
 	  HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
 	  adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
     cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
+    #if USE_USB_PRINTF
     usb_printf("cpu_temp: %lf\n", cpu_temp);
+    #endif
     osDelay(500);
   }
   /* USER CODE END StartAdcTask */
@@ -762,38 +765,49 @@ void StartAdcTask(void *argument)
 void StartModbusTask(void *argument)
 {
   /* USER CODE BEGIN StartModbusTask */
+  #if AUTO_GET_NEWLY_PLUGGED_SENSOR
   uint8_t current_sensor_num;
+  #endif
+  HAL_StatusTypeDef state;
 
   //清空rx_buf,开启DMA空闲中断接收
   //SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
   __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);
 
-  HAL_StatusTypeDef state=Get_MagSensors_Plugged();
+  Check_MagSensors_SlaveID();
+
+  state=Get_MagSensors_Plugged();
   while(state == HAL_OK){
     state=Get_MagSensors_Plugged();
   };
+  #if USE_USB_PRINTF
   usb_printf("Plugged sensor number: %d\n", sensor_num);
+  #endif
 
   //更新配置
   for(uint8_t i=0; i<sensor_num; i++){
-    Get_MagSensors_Config(i);
+    Get_MagSensor_Config(&mag_sensor[i]);
   }
 
   for (;;){
+    //get sensor data
     //Modbus_CMD50_ReadBytes(0x01,0x00,0x04);
     Get_MagSensors_Data();
+ 
+    //send to PC
 
-
-    //检测新添加的传感器，增加检测uid会等待较短时间ADD_GETUID_DELAY_TIME*REPORT_UID_DELAY_FACTOR=10*100ms
+    //检测新添加的传感器，增加检测uid会等待较短时间ADD_GETUID_DELAY_TIME*REPORT_UID_DELAY_FACTOR=1*100ms
+    #if AUTO_GET_NEWLY_PLUGGED_SENSOR
     current_sensor_num=sensor_num;
     if(Get_MagSensors_Plugged() == HAL_OK){
       for(uint8_t i=current_sensor_num; i<sensor_num; i++){
-        Get_MagSensors_Config(i);
+        Get_MagSensor_Config(&mag_sensor[i]);
       }
     };
+    #endif
 
-    osDelay(100);
+    osDelay(10);
   }
 
   /* USER CODE END StartModbusTask */

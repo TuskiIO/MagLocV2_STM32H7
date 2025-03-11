@@ -3,9 +3,19 @@
 
 #include "stm32h7xx_hal.h"
 
-extern uint16_t sensor_num;
+
+
+#define AUTO_GET_NEWLY_PLUGGED_SENSOR   0
 #define INITIAL_GETUID_DELAY_TIME  50   //factor=100ms
-#define ADD_GETUID_DELAY_TIME      10   //factor=100ms
+#define ADD_GETUID_DELAY_TIME      1   //factor=100ms
+
+#define MAG_SENSOR_CONFIG_OFFSET    0x00
+#define MAG_SENSOR_CONFIG_LENGTH    0x46
+#define MAG_SENSOR_DATA_OFFSET      0X46
+#define MAG_SENSOR_DATA_LENGTH      0X2C
+
+#define MAG_SENSOR_MAGADC_OFFSET    0x54
+#define MAG_SENSOR_MAGVAL_OFFSET    0x61
 
 typedef enum{
     FALSE = 0,
@@ -65,20 +75,29 @@ typedef struct {
 
 // main data struct & Reg offset defines
 typedef struct{
+    // read/write registers
     FULL_CFG_t          cfg;                // reg offset =  0(0x00), len = 70 Bytes
-
-    bool                mag_sensor_DRDY;    // reg offset = 70(0x46), len =  1 Byte
-    bool                rm3100_DRDY;        // reg offset = 71(0x47), len =  1 Byte
-    float               finish_meas_t_ms;   // reg offset = 72(0x48), len =  4 Byte       // timestamp in ms when RM3100 finishes measurement
-    int32_t             magADC[3];          // reg offset = 76(0x4C), len = 12 Byte       // Raw magnetometer readings, in LSB counts
+    float               timestamp_ref;      // reg offset = 70(0x46), len =  4 Bytes      // write to this value will sync slave time with ref (with communication delays)
+    // read-only registers
+    uint32_t            UID32;              // reg offset = 74(0x4A), len =  4 Bytes
+    bool                mag_sensor_DRDY;    // reg offset = 78(0x4E), len =  1 Bytes
+    bool                rm3100_DRDY;        // reg offset = 79(0x4F), len =  1 Bytes
+    float               timestamp;          // reg offset = 80(0x50), len =  4 Bytes      // timestamp in ms when RM3100 finishes measurement
+    int32_t             magADC[3];          // reg offset = 84(0x54), len = 12 Bytes      // Raw magnetometer readings, in LSB counts
     uint8_t             magADC_CRC;         // CRC-8 for magADC data, Motorola, polinomial x^8+x^5+x^4+x^0 (0x31 0b100110001)
-    float               magVal[3];          // reg offset = 89(0x59), len = 12 Byte       // Calibrated magnet-field intensity, in uT
+    float               magVal[3];          // reg offset = 97(0x61), len = 12 Bytes      // Calibrated magnet-field intensity, in uT
     uint8_t             magVal_CRC;         // CRC-8 for magVal data, Motorola, polinomial x^8+x^5+x^4+x^0 (0x31 0b100110001)
-    float               magVal_t;           // reg offset =102(0x66), len = 4 Byte        // Calibrated magnet-field total intensity, in uT
-    float               magStd;             // reg offset =106(0x6A), len = 4 Byte        // standard deviation of the magnetic field total intensity
-} MAG_SENSOR_module_t; // size: 110 Bytes
+    float               magVal_t;           // reg offset =110(0x6E), len = 4 Bytes       // Calibrated magnet-field total intensity, in uT
+    float               magStd;             // reg offset =114(0x72), len = 4 Bytes       // standard deviation of the magnetic field total intensity
+} MAG_SENSOR_module_t; // size: 118 Bytes
 
 #pragma pack() //align memory allocation with default strategy
+
+
+extern uint16_t sensor_num;
+extern MAG_SENSOR_module_t mag_sensor[];
+extern uint8_t slaveID_tba;
+extern volatile uint32_t slaveID_map[];
 
 /**
  * @brief  将所有默认地址的传感器分配slaveID，并修改全局变量sensor_num，将slaveID保存在MAG_SENSOR_Config_t中，初次检测会等待更长时间
@@ -89,17 +108,33 @@ typedef struct{
  HAL_StatusTypeDef Get_MagSensors_Plugged(void);
 
 /**
- * @brief  将单个传感器配置FULL_CFG_t更新
- * @param  sensor_idx: 传感器索引
+ * @brief  读单个传感器配置FULL_CFG_t
+ * @param  sensor: 传感器结构体指针
  * @retval HAL_OK
  * @retval HAL_ERROR
  */
- HAL_StatusTypeDef Get_MagSensors_Config(uint8_t sensor_idx);
+HAL_StatusTypeDef Get_MagSensor_Config(MAG_SENSOR_module_t *sensor);
+
+ /**
+ * @brief  写单个传感器配置FULL_CFG_t
+ * @param  sensor: 传感器结构体指针
+ * @retval HAL_OK
+ * @retval HAL_ERROR
+ */
+HAL_StatusTypeDef Set_MagSensors_Config(MAG_SENSOR_module_t *sensor);
  
 /**
  * @brief  TriggerMeasure后将所有传感器数据更新到MAG_SENSOR_module_t中
  * @retval HAL_OK       
  */
  HAL_StatusTypeDef Get_MagSensors_Data(void);
+
+
+ /**
+ * @brief  初始化sensor_num，扫描已连接并分配了ID的传感器，将冲突传感器slaveID分配为0xF7
+ * @retval HAL_OK       检测到传感器，更新到sensor_numS
+ * @retval HAL_TIMEOUT  未检测到传感器
+ */
+ HAL_StatusTypeDef Check_MagSensors_SlaveID(void);
 
 #endif

@@ -50,6 +50,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     modbus_rtu/modbus_rtu.c
     modbus_rtu/mag_sensor.c
+    modbus_rtu/sensor_DHCP.c
     ICM42688P/ICM42688P.c
 )
 

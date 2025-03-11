@@ -5,17 +5,28 @@
 
 #define RX_BUF_SIZE 256
 #define TX_BUF_SIZE 256
-#define TRX_TIMEOUT 100
+#define RX_TIMEOUT 10
 #define MB_Broadcast_ID 0x00
 #define MB_Temp_ID 0xF7
 #define MB_MAX_ID 0xF7
 #define REPORT_UID_DELAY_FACTOR 100
 #define MAX_SENSOR_NUM 246  //0xF6
+#define SET_ID_RETRY_TIMES  2
 
 extern uint8_t rx_buf[];
 extern uint8_t tx_buf[];
 extern uint16_t sensor_0xF7_cnt;
-extern uint8_t *sensor_UID[MAX_SENSOR_NUM];
+extern uint8_t *sensor_UID[];
+
+// #pragma pack(push, 1)
+// typedef struct {
+//     uint8_t slaveID;
+//     uint32_t UID;
+//     uint8_t reserved[3];  // 填充字节保证8字节对齐
+// } SensorID_t;
+// #pragma pack(pop)
+// /* 数据结构声明 */
+// extern SensorID_t Sensor_ID[];
 
 extern UART_HandleTypeDef hlpuart1;  // LPUART1句柄
 extern DMA_HandleTypeDef hdma_lpuart1_rx;

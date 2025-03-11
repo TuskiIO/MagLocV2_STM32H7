@@ -57,7 +57,7 @@ HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *txFrame, uint16_t txLen, ui
 {
 
     //Modbus_Transmit_wCRC(txFrame,txLen);
-    HAL_StatusTypeDef status = HAL_UART_Transmit(&hlpuart1, txFrame, txLen, TRX_TIMEOUT);
+    HAL_StatusTypeDef status = HAL_UART_Transmit(&hlpuart1, txFrame, txLen, 100);
     if (status != HAL_OK){
         return status;
     }
@@ -76,7 +76,7 @@ HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *txFrame, uint16_t txLen, ui
     }
 
     /* 阻塞等待DMA接收完成（超时100ms，可根据需要调整） */
-    if (osSemaphoreAcquire(modbusSemaphoreHandle, TRX_TIMEOUT) != osOK){
+    if (osSemaphoreAcquire(modbusSemaphoreHandle, RX_TIMEOUT) != osOK){
         return HAL_TIMEOUT;
     }
 
@@ -102,7 +102,9 @@ HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uin
     /* 计算预期响应帧长度: slaveId + func + data_length字节计数 + 数据(data_length) + CRC(2) */
     //uint16_t rxLen = 1 + 1 + 1 + data_length + 2;
 
-    Modbus_Master_SendReceive(txFrame, sizeof(txFrame), rxFrame);
+    if(Modbus_Master_SendReceive(txFrame, sizeof(txFrame), rxFrame) == HAL_TIMEOUT){
+        return HAL_TIMEOUT;
+    }
 
     /* 校验响应：检查slaveId、功能码和数据字节计数 */
     if (rxFrame[0] != slaveId || rxFrame[1] != 0x50 || rxFrame[2] != data_length){
@@ -136,7 +138,9 @@ HAL_StatusTypeDef Modbus_CMD51_WriteBytes(uint8_t slaveId, uint8_t start_reg, ui
 
     /* 预期响应帧与请求帧一致 */
     uint8_t rxFrame[256] = {0};
-    Modbus_Master_SendReceive(txFrame, txLen, rxFrame);
+    if(Modbus_Master_SendReceive(txFrame, txLen, rxFrame) == HAL_TIMEOUT){
+        return HAL_TIMEOUT;
+    }
 
     /* 简单对比响应与请求是否一致 */
     if (memcmp(txFrame, rxFrame, txLen) != 0)
@@ -159,7 +163,9 @@ HAL_StatusTypeDef Modbus_CMD60_TriggerMeasurement(uint8_t slaveId)
         
     /* 预期响应帧与请求帧一致 */
     uint8_t rxFrame[4] = {0};
-    Modbus_Master_SendReceive(txFrame, sizeof(txFrame), rxFrame);
+    if(Modbus_Master_SendReceive(txFrame, sizeof(txFrame), rxFrame) == HAL_TIMEOUT){
+        return HAL_TIMEOUT;
+    }
 
     if (memcmp(txFrame, rxFrame, sizeof(txFrame)) != 0){
         return HAL_ERROR;
@@ -194,7 +200,7 @@ HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UI
             sensor_UID[i] = NULL;
         }
     }
-    HAL_UART_Transmit(&hlpuart1, txFrame, sizeof(txFrame), TRX_TIMEOUT);
+    HAL_UART_Transmit(&hlpuart1, txFrame, sizeof(txFrame), 100);
  
 
     uint8_t rxFrame[RX_BUF_SIZE];
