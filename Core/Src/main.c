@@ -20,11 +20,13 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "lwip.h"
+#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usb_device.h"
 #include "usbd_cdc_if.h"
+#include "ptpd.h"
+#include "udp_conn.h"
 #include "modbus_rtu.h"
 #include "mag_sensor.h"
 #include "ICM42688P.h"
@@ -74,12 +76,19 @@ const osThreadAttr_t adcTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+// /* Definitions for triggerTask */
+// osThreadId_t triggerTaskHandle;
+// const osThreadAttr_t triggerTask_attributes = {
+//   .name = "triggerTask",
+//   .stack_size = 512 * 4,
+//   .priority = (osPriority_t) osPriorityAboveNormal,
+// };
 /* Definitions for modbus_task */
 osThreadId_t modbus_taskHandle;
 const osThreadAttr_t modbus_task_attributes = {
   .name = "modbus_task",
   .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityAboveNormal,
+  .priority = (osPriority_t) osPriorityAboveNormal1,
 };
 /* USER CODE BEGIN PV */
 
@@ -98,6 +107,7 @@ static void MX_TIM2_Init(void);
 static void MX_CRC_Init(void);
 void StartDefaultTask(void *argument);
 void StartAdcTask(void *argument);
+// void StartTriggerTask(void *argument);
 void StartModbusTask(void *argument);
 
 /* USER CODE BEGIN PFP */
@@ -194,6 +204,9 @@ int main(void)
 
   /* creation of modbus_task */
   modbus_taskHandle = osThreadNew(StartModbusTask, NULL, &modbus_task_attributes);
+
+  // /* creation of triggerTask */
+  // triggerTaskHandle = osThreadNew(StartTriggerTask, NULL, &triggerTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -298,7 +311,7 @@ static void MX_ADC3_Init(void)
   /** Common config
   */
   hadc3.Instance = ADC3;
-  hadc3.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc3.Init.Resolution = ADC_RESOLUTION_16B;
   hadc3.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc3.Init.LowPowerAutoWait = DISABLE;
@@ -605,9 +618,17 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LED1_Pin|LED2_Pin|LED3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(TRG_1_GPIO_Port, TRG_1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, OLED_BLK_Pin|OLED_DC_Pin|OLED_RST_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : TRG_1_Pin */
+  GPIO_InitStruct.Pin = TRG_1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(TRG_1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : KEY3_Pin KEY2_Pin */
   GPIO_InitStruct.Pin = KEY3_Pin|KEY2_Pin;
@@ -621,8 +642,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(KEY1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : CAM_TRIG2_Pin CAM_TRIG1_Pin */
-  GPIO_InitStruct.Pin = CAM_TRIG2_Pin|CAM_TRIG1_Pin;
+  /*Configure GPIO pins : CAM_TRIG2_Pin */
+  GPIO_InitStruct.Pin = CAM_TRIG2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -662,6 +683,14 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+static uint8_t recv_buf[1024] = {0};
+void example_recv_udp(void *arg, void* data, u32_t recv_len)
+{
+  if(data != NULL){
+    usb_printf("udp_recv: %s\n", (const char*)data);
+  }
+}
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   
@@ -709,16 +738,25 @@ void StartDefaultTask(void *argument)
   /* init code for LWIP */
   MX_LWIP_Init();
   /* USER CODE BEGIN 5 */
-  
+  ptpd_init();
+  osDelay(1000);
   /* Infinite loop */
-  //int led_cnt = 0;
+  int led_cnt = 0;
+  struct udp_pcb* pcb = create_udp_send(5001);
+  ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
+  pcb = create_udp_recv(pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
+  const char* message = "Hello UDP message!\n\r";
   for(;;)
   {
     // led_cnt++;
     // if(led_cnt > 500){
     //   HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
     //   led_cnt = 0;
+    //   do_udp_send(pcb, remote_ip, 5002, (void*)message, strlen(message));
     // }
+    // ptpd_task();
+    // updatePTPTimers();
+    // osDelay(1);
     osDelay(500);
   }
 
@@ -755,6 +793,31 @@ void StartAdcTask(void *argument)
   /* USER CODE END StartAdcTask */
 }
 
+/* USER CODE BEGIN Header_StartTriggerTask */
+/**
+* @brief Function implementing the triggerTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTriggerTask */
+void StartTriggerTask(void *argument)
+{
+  /* USER CODE BEGIN StartTriggerTask */
+  /* Infinite loop */
+  osDelay(4000);
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  const TickType_t xDelay5ms = pdMS_TO_TICKS(5);
+  int trigger_cnt = 0;
+  for(;;)
+  {
+    if (trigger_cnt % 4 == 0){
+      HAL_GPIO_TogglePin(TRG_1_GPIO_Port, TRG_1_Pin);
+    }
+    ++trigger_cnt;
+    vTaskDelayUntil(&xLastWakeTime, xDelay5ms);
+  }
+  /* USER CODE END StartTriggerTask */
+}
 /* USER CODE BEGIN Header_StartModbusTask */
 /**
 * @brief Function implementing the modbus_task thread.
@@ -878,7 +941,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM6) {
+  if (htim->Instance == TIM6){
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
