@@ -52,6 +52,20 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     modbus_rtu/mag_sensor.c
     modbus_rtu/sensor_DHCP.c
     ICM42688P/ICM42688P.c
+
+    ptp/ptpd.c
+    ptp/gptp.c
+    ptp/arith.c
+    ptp/bmc.c
+    ptp/protocol.c
+    ptp/dep/ptpd_dep.c
+    ptp/dep/msg.c
+    ptp/dep/net.c
+    ptp/dep/servo.c
+    ptp/dep/startup.c
+    ptp/dep/sys_time.c
+    ptp/dep/timer.c
+    LWIP/App/udp_conn.c
 )
 
 # Add include paths
@@ -59,6 +73,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     modbus_rtu
     ICM42688P
+
+    ptp
 )
 
 # Add project symbols (macros)
