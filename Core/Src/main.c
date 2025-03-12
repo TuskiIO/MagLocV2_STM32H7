@@ -20,10 +20,10 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "lwip.h"
+#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "ptpd.h"
 #include "udp_conn.h"
@@ -76,10 +76,10 @@ const osThreadAttr_t adcTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for modbustask */
-osThreadId_t modbustaskHandle;
-const osThreadAttr_t modbustask_attributes = {
-  .name = "modbustask",
+/* Definitions for modbusTask */
+osThreadId_t modbusTaskHandle;
+const osThreadAttr_t modbusTask_attributes = {
+  .name = "modbusTask",
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal1,
 };
@@ -99,12 +99,12 @@ void SystemClock_Config(void);
 static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_BDMA_Init(void);
-static void MX_ADC3_Init(void);
+static void MX_CRC_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_SPI4_Init(void);
+static void MX_ADC3_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_CRC_Init(void);
 void StartDefaultTask(void *argument);
 void StartAdcTask(void *argument);
 void StartModbusTask(void *argument);
@@ -160,14 +160,13 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_BDMA_Init();
-  MX_ADC3_Init();
+  MX_CRC_Init();
   MX_LPUART1_UART_Init();
   MX_SPI3_Init();
   MX_SPI4_Init();
+  MX_ADC3_Init();
   MX_TIM2_Init();
-  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
-  MX_USB_DEVICE_Init();
 
   ICM42688_Init();
   HAL_Delay(500);
@@ -202,8 +201,8 @@ int main(void)
   /* creation of adcTask */
   adcTaskHandle = osThreadNew(StartAdcTask, NULL, &adcTask_attributes);
 
-  /* creation of modbustask */
-  modbustaskHandle = osThreadNew(StartModbusTask, NULL, &modbustask_attributes);
+  /* creation of modbusTask */
+  modbusTaskHandle = osThreadNew(StartModbusTask, NULL, &modbusTask_attributes);
 
   /* creation of TriggerTask */
   // TriggerTaskHandle = osThreadNew(StartTriggerTask, NULL, &TriggerTask_attributes);
@@ -311,7 +310,7 @@ static void MX_ADC3_Init(void)
   /** Common config
   */
   hadc3.Instance = ADC3;
-  hadc3.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc3.Init.Resolution = ADC_RESOLUTION_16B;
   hadc3.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc3.Init.LowPowerAutoWait = DISABLE;
@@ -415,7 +414,8 @@ static void MX_LPUART1_UART_Init(void)
   hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
   hlpuart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
   hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_RS485Ex_Init(&hlpuart1, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
+  hlpuart1.FifoMode = UART_FIFOMODE_DISABLE;
+  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -428,6 +428,10 @@ static void MX_LPUART1_UART_Init(void)
     Error_Handler();
   }
   if (HAL_UARTEx_DisableFifoMode(&hlpuart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_RS485Ex_Init(&hlpuart1, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
   {
     Error_Handler();
   }
@@ -605,8 +609,8 @@ static void MX_BDMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
@@ -617,7 +621,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(TRG_1_GPIO_Port, TRG_1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, TRG_2_Pin|TRG_1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LED1_Pin|LED2_Pin|LED3_Pin, GPIO_PIN_RESET);
@@ -637,18 +641,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(KEY1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : CAM_TRIG2_Pin */
-  GPIO_InitStruct.Pin = CAM_TRIG2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(CAM_TRIG2_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : TRG_1_Pin */
-  GPIO_InitStruct.Pin = TRG_1_Pin;
+  /*Configure GPIO pins : TRG_2_Pin TRG_1_Pin */
+  GPIO_InitStruct.Pin = TRG_2_Pin|TRG_1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(TRG_1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LED1_Pin LED2_Pin LED3_Pin */
   GPIO_InitStruct.Pin = LED1_Pin|LED2_Pin|LED3_Pin;
@@ -680,8 +678,8 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(KEY2_EXTI_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(KEY2_EXTI_IRQn);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -739,6 +737,9 @@ void StartDefaultTask(void *argument)
 {
   /* init code for LWIP */
   MX_LWIP_Init();
+
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   ptpd_init();
   osDelay(1000);
@@ -949,7 +950,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM6) {
+  if (htim->Instance == TIM6)
+  {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */

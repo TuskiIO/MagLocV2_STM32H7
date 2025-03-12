@@ -66,8 +66,8 @@ void Error_Handler(void);
 #define KEY1_Pin GPIO_PIN_0
 #define KEY1_GPIO_Port GPIOA
 #define KEY1_EXTI_IRQn EXTI0_IRQn
-#define CAM_TRIG2_Pin GPIO_PIN_5
-#define CAM_TRIG2_GPIO_Port GPIOA
+#define TRG_2_Pin GPIO_PIN_5
+#define TRG_2_GPIO_Port GPIOA
 #define TRG_1_Pin GPIO_PIN_6
 #define TRG_1_GPIO_Port GPIOA
 #define LED1_Pin GPIO_PIN_0
