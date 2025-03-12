@@ -2,7 +2,7 @@
 #define _SENSOR_DATA_H_
 
 #include "stm32h7xx_hal.h"
-
+#include <stdbool.h>
 
 
 #define AUTO_GET_NEWLY_PLUGGED_SENSOR   0
@@ -17,10 +17,6 @@
 #define MAG_SENSOR_MAGADC_OFFSET    0x54
 #define MAG_SENSOR_MAGVAL_OFFSET    0x61
 
-typedef enum{
-    FALSE = 0,
-    TRUE = 1
-}bool;
 
 #pragma pack(1) //align memory allocation with 1 Byte
 
