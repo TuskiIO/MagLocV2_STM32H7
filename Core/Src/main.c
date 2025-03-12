@@ -748,7 +748,7 @@ void StartDefaultTask(void *argument)
   // ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
   // pcb = create_udp_recv(pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
   // const char* message = "Hello UDP message!\n\r";
-  for(;;)
+  for(;;) 
   {
     // led_cnt++;
     // if(led_cnt > 500){
@@ -815,12 +815,14 @@ void StartModbusTask(void *argument)
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
   __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);
 
-  Check_MagSensors_SlaveID();
-
-  state=Get_MagSensors_Plugged();
-  while(state == HAL_OK){
+  state = Check_MagSensors_SlaveID();
+  if(state == HAL_TIMEOUT){
     state=Get_MagSensors_Plugged();
-  };
+    while(state == HAL_OK){
+      state=Get_MagSensors_Plugged();
+    };
+  }
+
   #if USE_USB_PRINTF
   usb_printf("Plugged sensor number: %d\n", sensor_num);
   #endif
@@ -833,7 +835,10 @@ void StartModbusTask(void *argument)
   for (;;){
     //get sensor data
     //Modbus_CMD50_ReadBytes(0x01,0x00,0x04);
-    Get_MagSensors_Data();
+    
+    //trigger measure and mark the time
+    // Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
+    // Get_MagSensors_Data();
  
     //send to PC
 

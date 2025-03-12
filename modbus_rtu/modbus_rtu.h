@@ -85,8 +85,8 @@ HAL_StatusTypeDef Modbus_CMD60_TriggerMeasurement(uint8_t slaveId);
  * @retval HAL_OK       接收到至少一个slave_ID=0xF7的传感器返回帧
  * @retval HAL_ERROR    未收到来自0xF7的有效帧, sensor_num=0
  *
- * 请求帧格式: | slaveId | 0x61 | 8bit_UID_Lower | 8bit_UID_Upper | delay_min | delay_max | return_UID_length | CRC低 | CRC高 |
- * 响应帧格式: | slaveId | 0x61 | Return_UID_Length | UID数据（长度=return_UID_length） | CRC低 | CRC高 |
+ * 请求帧格式: | SlaveId | 0x61 | 8bit_UID_Lower | 8bit_UID_Upper | MB_ID_Lower | MB_ID_Upper | Delay_Lower | Delay_Upper | UID_Length | CRC_L | CRC_H
+ * 响应帧格式: | slaveId | 0x61 | UID_Length | UID数据（长度=return_UID_length） | CRC低 | CRC高 |
  */
 HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UID8_upper, uint8_t delay_max, uint8_t UID_length);
 

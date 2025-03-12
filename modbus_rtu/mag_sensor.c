@@ -49,6 +49,9 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
 
             //分配成功
             mag_sensor[sensor_num].cfg.mag_sensor_cfg.mb_slave_id = slaveID_tba;
+            #if USE_USB_PRINTF
+            usb_printf("Sensor index: %d; SlaveID: %x\n", sensor_num, slaveID_tba);
+            #endif
             sensor_num++;
 
             //待分配的slaveID++
@@ -103,8 +106,6 @@ HAL_StatusTypeDef Set_MagSensor_Config(MAG_SENSOR_module_t *sensor){
 HAL_StatusTypeDef Get_MagSensors_Data(void){
     // uint8_t rxFrame[256] = {0};
 
-    //trigger measure and mark the time
-    Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
     for(uint8_t i=0; i<sensor_num; i++){
         //get data
         if(Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET) != HAL_OK){
@@ -120,7 +121,10 @@ HAL_StatusTypeDef Get_MagSensors_Data(void){
 HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
     uint8_t temp_slaveID = 0;
 
+    //初始化sensor_num与slaveID_map
     sensor_num = 0;
+
+    //轮询确认已有的slaveID
     for(uint8_t i=1; i<MB_MAX_ID; i++){
         HAL_StatusTypeDef state=Modbus_CMD50_ReadBytes(i, 0x00, 0x01, &temp_slaveID);
         if(state == HAL_OK){
@@ -137,6 +141,9 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
           //出现冲突，地址配置为0xF7
           temp_slaveID = MB_Temp_ID;
           Modbus_CMD51_WriteBytes(i, 0x00, 0x01, &temp_slaveID);
+          #if USE_USB_PRINTF
+          usb_printf("SlaveID Conflict: %x\n", temp_slaveID);
+          #endif
         }
     }
     
