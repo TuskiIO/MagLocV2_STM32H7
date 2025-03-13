@@ -30,7 +30,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         //刷新缓存，避免优化导致rx_buf不更新
         SCB_InvalidateDCache_by_Addr((uint32_t *)rx_buf, rx_size);
         rx_size = Size;
-        //HAL_UART_Transmit(&hlpuart1, rx_buf, Size, 100);        
+        //HAL_UART_Transmit(&hlpuart1, rx_buf, Size, 100);  
         CDC_Transmit_HS(rx_buf, Size);
     
         // memset(rx_buf, 0, RX_BUF_SIZE);
@@ -188,7 +188,7 @@ HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UI
     txFrame[7] = delay_max;
     txFrame[8] = UID_length;
 
-    uint16_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)txFrame, 7);
+    uint16_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)txFrame, 9);
     txFrame[9] = (uint8_t)(crc & 0xFF);
     txFrame[10] = (uint8_t)(crc >> 8);
 

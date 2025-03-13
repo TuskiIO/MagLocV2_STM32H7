@@ -3,7 +3,9 @@
 #include "usbd_cdc_if.h"
 
 MAG_SENSOR_module_t mag_sensor[MAX_SENSOR_NUM];
-uint16_t sensor_num = 0;
+volatile float timestamp;
+volatile uint32_t TIM2_time_s;
+volatile uint16_t sensor_num = 0;
 uint8_t slaveID_tba = 0x01;       //slaveID to be allocated
 volatile uint32_t slaveID_map[8] = {0};     //bit map of used slaveID
 extern uint16_t sensor_0xF7_cnt;
@@ -150,4 +152,40 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
     if(sensor_num == 0)
         return HAL_TIMEOUT;
     return HAL_OK;
+}
+
+float Update_TimeStamp_ms(void) {
+    timestamp = (float)TIM2_time_s + (float)(TIM2->CNT)/1000000.0f;
+    return timestamp;
+}
+
+
+uint8_t PC_Trans_Buff[583] = {0};
+uint16_t PC_TRANS_Assemble(void)
+{
+    uint32_t temp;
+    uint8_t mag_idx = 0;
+    uint16_t ptr = 0;
+    PC_Trans_Buff[ptr++] = 0x55;
+    PC_Trans_Buff[ptr++] = 0xaa;
+    PC_Trans_Buff[ptr++] = 0xff;
+    PC_Trans_Buff[ptr++] = sensor_num;
+
+    memcpy((uint8_t *)&temp, (uint8_t *)&timestamp, 4);
+    PC_Trans_Buff[ptr++] = (temp) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+
+    for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
+        for(uint8_t i = 0; i<3; i++){
+            //assemble float magVal[3]
+            memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
+            PC_Trans_Buff[ptr++] = (temp) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+        }
+    }
+    return ptr;
 }

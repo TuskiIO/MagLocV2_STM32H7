@@ -91,7 +91,7 @@ const osThreadAttr_t TriggerTask_attributes = {
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* USER CODE BEGIN PV */
-
+uint8_t key3_pressed;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -556,9 +556,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 23999;
+  htim2.Init.Prescaler = 239;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 299;
+  htim2.Init.Period = 999999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -577,7 +577,10 @@ static void MX_TIM2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM2_Init 2 */
-
+  __HAL_TIM_CLEAR_IT(&htim2,TIM_IT_UPDATE);
+  __HAL_TIM_ENABLE_IT(&htim2,TIM_IT_UPDATE);
+  __HAL_TIM_SET_COUNTER(&htim2, 0);		// clear timer conter
+  __HAL_TIM_ENABLE(&htim2);				// enable timer
   /* USER CODE END TIM2_Init 2 */
 
 }
@@ -708,6 +711,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     if(HAL_GPIO_ReadPin(KEY2_GPIO_Port,KEY2_Pin)==GPIO_PIN_RESET){
       //key2 pressed
       HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+
+      #if PRESS_KEY_B2_SET_SLAVEID
+      uint8_t temp_key_set_slaveID = PRESS_KEY_B2_SET_SLAVEID_ADDRESS;
+      Modbus_CMD51_WriteBytes(MB_Broadcast_ID,0x00,0x01,&temp_key_set_slaveID);
+      #endif
     }
     else{
       //key2 released
@@ -717,6 +725,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   if(GPIO_Pin == KEY3_Pin){
     if(HAL_GPIO_ReadPin(KEY3_GPIO_Port,KEY3_Pin)==GPIO_PIN_RESET){
       //key3 pressed
+      key3_pressed = 1;
       HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
     }
     else{
@@ -789,7 +798,7 @@ void StartAdcTask(void *argument)
 	  adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
     cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
     #if USE_USB_PRINTF
-    usb_printf("cpu_temp: %lf\n", cpu_temp);
+    //usb_printf("cpu_temp: %lf\n", cpu_temp);
     #endif
     osDelay(500);
   }
@@ -810,22 +819,24 @@ void StartModbusTask(void *argument)
   uint8_t current_sensor_num;
   #endif
   HAL_StatusTypeDef state;
+  uint16_t PC_buf_size=0;
 
   //清空rx_buf,开启DMA空闲中断接收
   //SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
   __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);
 
+  timestamp = 0;
+  TIM2_time_s = 0;
+
   state = Check_MagSensors_SlaveID();
+  #if INITIAL_GET_NEWLY_PLUGGED_SENSOR
   if(state == HAL_TIMEOUT){
     state=Get_MagSensors_Plugged();
     while(state == HAL_OK){
       state=Get_MagSensors_Plugged();
     };
   }
-
-  #if USE_USB_PRINTF
-  usb_printf("Plugged sensor number: %d\n", sensor_num);
   #endif
 
   //更新配置
@@ -834,14 +845,16 @@ void StartModbusTask(void *argument)
   }
 
   for (;;){
-    //get sensor data
-    //Modbus_CMD50_ReadBytes(0x01,0x00,0x04);
-    
-    //trigger measure and mark the time
-    // Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
-    // Get_MagSensors_Data();
+    #if GET_MAGSENSOR_DATA
+    //get sensor data->trigger measure and mark the time
+    Update_TimeStamp_ms();
+    Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
+    Get_MagSensors_Data();
  
     //send to PC
+    PC_buf_size = PC_TRANS_Assemble();
+    CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
+    #endif
 
     //检测新添加的传感器，增加检测uid会等待较短时间ADD_GETUID_DELAY_TIME*REPORT_UID_DELAY_FACTOR=1*100ms
     #if AUTO_GET_NEWLY_PLUGGED_SENSOR
@@ -853,7 +866,18 @@ void StartModbusTask(void *argument)
     };
     #endif
 
-    osDelay(10);
+    #if USE_USB_PRINTF
+    usb_printf("Plugged sensor number: %d\n", sensor_num);
+    #endif
+
+    #if PRESS_KEY_B2_SET_SLAVEID
+    if(key3_pressed){
+      Modbus_CMD60_TriggerMeasurement(PRESS_KEY_B2_SET_SLAVEID_ADDRESS);
+      key3_pressed = 0;
+    }
+    #endif
+    
+    osDelay(100);
   }
 
   /* USER CODE END StartModbusTask */
@@ -955,7 +979,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
+  if (htim->Instance == TIM2){
+    TIM2_time_s++;
+  }
   /* USER CODE END Callback 1 */
 }
 

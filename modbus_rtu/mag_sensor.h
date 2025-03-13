@@ -4,8 +4,13 @@
 #include "stm32h7xx_hal.h"
 #include <stdbool.h>
 
+#define GET_MAGSENSOR_DATA                  0
+#define INITIAL_GET_NEWLY_PLUGGED_SENSOR    0
+#define AUTO_GET_NEWLY_PLUGGED_SENSOR       0
 
-#define AUTO_GET_NEWLY_PLUGGED_SENSOR   0
+#define PRESS_KEY_B2_SET_SLAVEID  0
+#define PRESS_KEY_B2_SET_SLAVEID_ADDRESS 0x02
+
 #define INITIAL_GETUID_DELAY_TIME  50   //factor=100ms
 #define ADD_GETUID_DELAY_TIME      1   //factor=100ms
 
@@ -89,11 +94,13 @@ typedef struct{
 
 #pragma pack() //align memory allocation with default strategy
 
-
-extern uint16_t sensor_num;
+extern volatile float timestamp;
+extern volatile uint32_t TIM2_time_s;
+extern volatile uint16_t sensor_num;
 extern MAG_SENSOR_module_t mag_sensor[];
 extern uint8_t slaveID_tba;
 extern volatile uint32_t slaveID_map[];
+extern uint8_t PC_Trans_Buff[583];
 
 /**
  * @brief  将所有默认地址的传感器分配slaveID，并修改全局变量sensor_num，将slaveID保存在MAG_SENSOR_Config_t中，初次检测会等待更长时间
@@ -128,9 +135,21 @@ HAL_StatusTypeDef Set_MagSensors_Config(MAG_SENSOR_module_t *sensor);
 
  /**
  * @brief  初始化sensor_num，扫描已连接并分配了ID的传感器，将冲突传感器slaveID分配为0xF7
- * @retval HAL_OK       检测到传感器，更新到sensor_numS
+ * @retval HAL_OK       检测到传感器，更新到sensor_num
  * @retval HAL_TIMEOUT  未检测到传感器
  */
  HAL_StatusTypeDef Check_MagSensors_SlaveID(void);
+
+/**
+ * @brief  将sensor_num个传感器数据打包
+ * @retval PC_Trans_Buff包长       
+ */
+uint16_t PC_TRANS_Assemble(void);
+
+/**
+ * @brief  更新timestamp    
+ * @retval 当前时间值(s)
+ */
+ float Update_TimeStamp_ms(void);
 
 #endif

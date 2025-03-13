@@ -6,9 +6,11 @@
 #define RX_BUF_SIZE 256
 #define TX_BUF_SIZE 256
 #define RX_TIMEOUT 10
+
 #define MB_Broadcast_ID 0x00
 #define MB_Temp_ID 0xF7
 #define MB_MAX_ID 0xF7
+
 #define REPORT_UID_DELAY_FACTOR 100
 #define MAX_SENSOR_NUM 246  //0xF6
 #define SET_ID_RETRY_TIMES  2
