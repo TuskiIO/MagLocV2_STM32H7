@@ -46,12 +46,10 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
     else
         delay_max = ADD_GETUID_DELAY_TIME;
     //return uid length = 2
-    //return uid length = 4
-    //红色形态
+    //return uid length = 4    //红色形态
     UID_length = 4;
     if(Modbus_CMD61_BroadcastReportUID(0x00, 0xFF, delay_max, UID_length) == HAL_OK){
-        sensor_0xF7_cnt += sensor_num;      //分配成功的sensor才会被加入sensor_num里
-        for(uint8_t i=sensor_num; i<sensor_0xF7_cnt; i++){
+        for(uint8_t i=0; i<sensor_0xF7_cnt; i++){
             //分配ID
             slaveID_tba = Find_Free_SlaveID();
             if(slaveID_tba == 0xFF){
@@ -67,8 +65,8 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
             }
             free(sensor_UID[i]);
             sensor_UID[i] = NULL;
+            //分配失败
             if(retry_times == 0){
-                //分配失败
                 error_mark++;
                 continue;
             }
@@ -77,7 +75,7 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
             #if USE_USB_PRINTF
             usb_printf("Sensor index: %d; SlaveID: %x\n", sensor_num, slaveID_tba);
             #endif
-            sensor_num++;
+            sensor_num++;   //分配成功的sensor才会被加入sensor_num里
 
             //处理slaveID_map
             SET_SLAVEID_MAP(slaveID_tba);
@@ -88,8 +86,7 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
         return HAL_TIMEOUT;
     }
    
-    //return uid length = 12
-    //究极红色形态
+    //return uid length = 12    //究极红色形态
 
     //error_mark表明有无法分配ID的传感器
     if(error_mark == 0)
