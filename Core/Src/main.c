@@ -96,6 +96,7 @@ uint8_t key3_pressed;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void PeriphCommonClock_Config(void);
 static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_BDMA_Init(void);
@@ -152,6 +153,9 @@ int main(void)
 
   /* Configure the system clock */
   SystemClock_Config();
+
+  /* Configure the peripherals common clocks */
+  PeriphCommonClock_Config();
 
   /* USER CODE BEGIN SysInit */
 
@@ -284,6 +288,33 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief Peripherals Common Clock Configuration
+  * @retval None
+  */
+void PeriphCommonClock_Config(void)
+{
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Initializes the peripherals clock
+  */
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_LPUART1;
+  PeriphClkInitStruct.PLL2.PLL2M = 5;
+  PeriphClkInitStruct.PLL2.PLL2N = 48;
+  PeriphClkInitStruct.PLL2.PLL2P = 4;
+  PeriphClkInitStruct.PLL2.PLL2Q = 4;
+  PeriphClkInitStruct.PLL2.PLL2R = 2;
+  PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
+  PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
+  PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
+  PeriphClkInitStruct.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PLL2;
+  PeriphClkInitStruct.AdcClockSelection = RCC_ADCCLKSOURCE_PLL2;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
@@ -819,8 +850,11 @@ void StartModbusTask(void *argument)
   uint8_t current_sensor_num;
   #endif
   HAL_StatusTypeDef state;
+  #if GET_MAGSENSOR_DATA
   uint16_t PC_buf_size=0;
+  #endif
 
+  //osDelay(2000);
   //清空rx_buf,开启DMA空闲中断接收
   //SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
@@ -829,14 +863,13 @@ void StartModbusTask(void *argument)
   timestamp = 0;
   TIM2_time_s = 0;
 
+  //检查已有的SlaveID，配置slaveID_map[8]
   state = Check_MagSensors_SlaveID();
   #if INITIAL_GET_NEWLY_PLUGGED_SENSOR
-  if(state == HAL_TIMEOUT){
+  state=Get_MagSensors_Plugged();
+  while(state == HAL_OK){
     state=Get_MagSensors_Plugged();
-    while(state == HAL_OK){
-      state=Get_MagSensors_Plugged();
-    };
-  }
+  };
   #endif
 
   //更新配置
@@ -850,7 +883,7 @@ void StartModbusTask(void *argument)
     Update_TimeStamp_ms();
     Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
     Get_MagSensors_Data();
- 
+
     //send to PC
     PC_buf_size = PC_TRANS_Assemble();
     CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);

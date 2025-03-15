@@ -9,7 +9,7 @@
 
 #define MB_Broadcast_ID 0x00
 #define MB_Temp_ID 0xF7
-#define MB_MAX_ID 0xF7
+#define MB_MAX_ID 0xF7      //range:0xE1~0XFF(225~255)
 
 #define REPORT_UID_DELAY_FACTOR 100
 #define MAX_SENSOR_NUM 246  //0xF6
@@ -48,12 +48,13 @@ HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *txFrame, uint16_t txLen, ui
  * @param  slaveId: 从机地址
  * @param  start_reg: 起始地址（1字节）
  * @param  data_length: 读取字节数
+ * @param  pData: 读出数据指针
  * @retval HAL状态
  *
  * 请求帧格式: | slaveId | 0x50 | start_reg | data_length | CRC低 | CRC高 |
  * 响应帧格式: | slaveId | 0x50 | data_length | data1 ... dataN | CRC低 | CRC高 |
  */
-HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uint8_t data_length, uint8_t *rxFrame);
+HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uint8_t data_length, uint8_t *pData);
 
 /**
  * @brief  CMD81 (0x51)：写从机特定地址处的字节数据（写操作后回显）

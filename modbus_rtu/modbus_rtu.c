@@ -80,15 +80,18 @@ HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *txFrame, uint16_t txLen, ui
         return HAL_TIMEOUT;
     }
 
+    if(rx_size>RX_BUF_SIZE){
+        return HAL_ERROR;
+    }
     memcpy(rxFrame,rx_buf,rx_size);
     return HAL_OK;
 }
 
 /* CMD0x50：读字节 */
-HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uint8_t data_length, uint8_t *rxFrame)
+HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uint8_t data_length, uint8_t *pData)
 {
     uint8_t txFrame[6];
-    //uint8_t rxFrame[256] = {0};
+    uint8_t rxFrame[256] = {0};
 
     /* 构造请求帧: [slaveId, 0x50, start_reg, data_length, CRC低, CRC高] */
     txFrame[0] = slaveId;
@@ -117,6 +120,7 @@ HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uin
         return HAL_ERROR;
     }
 
+    memcpy(pData, &rxFrame[3], data_length);
     return HAL_OK;
 }
 
@@ -219,7 +223,7 @@ HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UI
         }
         
         sensor_UID[sensor_0xF7_cnt] = (uint8_t *)malloc(UID_length);
-        memcpy(sensor_UID[sensor_0xF7_cnt],&rxFrame[2],UID_length);
+        memcpy(sensor_UID[sensor_0xF7_cnt],&rxFrame[3],UID_length);
         sensor_0xF7_cnt++;
     }
     

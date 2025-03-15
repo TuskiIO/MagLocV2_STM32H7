@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 #define GET_MAGSENSOR_DATA                  0
-#define INITIAL_GET_NEWLY_PLUGGED_SENSOR    0
+#define INITIAL_GET_NEWLY_PLUGGED_SENSOR    1
 #define AUTO_GET_NEWLY_PLUGGED_SENSOR       0
 
 #define PRESS_KEY_B2_SET_SLAVEID  0
@@ -22,6 +22,9 @@
 #define MAG_SENSOR_MAGADC_OFFSET    0x54
 #define MAG_SENSOR_MAGVAL_OFFSET    0x61
 
+#define GET_SLAVEID_MAP(idx)    ((slaveID_map[(idx) >> 5] >> ((idx) & 0x1F)) & 0x01)
+#define SET_SLAVEID_MAP(idx)    (slaveID_map[(idx) >> 5] |= (1U << ((idx) & 0x1F)))
+#define RESET_SLAVEID_MAP(idx)  (slaveID_map[(idx) >> 5] &= ~(1U << ((idx) & 0x1F)))
 
 #pragma pack(1) //align memory allocation with 1 Byte
 
@@ -99,7 +102,7 @@ extern volatile uint32_t TIM2_time_s;
 extern volatile uint16_t sensor_num;
 extern MAG_SENSOR_module_t mag_sensor[];
 extern uint8_t slaveID_tba;
-extern volatile uint32_t slaveID_map[];
+extern uint32_t slaveID_map[];
 extern uint8_t PC_Trans_Buff[583];
 
 /**
