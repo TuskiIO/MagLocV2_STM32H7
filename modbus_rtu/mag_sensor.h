@@ -4,7 +4,7 @@
 #include "stm32h7xx_hal.h"
 #include <stdbool.h>
 
-#define GET_MAGSENSOR_DATA                  0
+#define GET_MAGSENSOR_DATA                  1
 #define INITIAL_GET_NEWLY_PLUGGED_SENSOR    1
 #define AUTO_GET_NEWLY_PLUGGED_SENSOR       0
 
@@ -17,7 +17,7 @@
 #define MAG_SENSOR_CONFIG_OFFSET    0x00
 #define MAG_SENSOR_CONFIG_LENGTH    0x46
 #define MAG_SENSOR_DATA_OFFSET      0X46
-#define MAG_SENSOR_DATA_LENGTH      0X2C
+#define MAG_SENSOR_DATA_LENGTH      0X30
 
 #define MAG_SENSOR_MAGADC_OFFSET    0x54
 #define MAG_SENSOR_MAGVAL_OFFSET    0x61

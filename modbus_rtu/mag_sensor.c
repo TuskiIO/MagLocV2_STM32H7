@@ -179,12 +179,13 @@ uint8_t PC_Trans_Buff[583] = {0};
 uint16_t PC_TRANS_Assemble(void)
 {
     uint32_t temp;
-    uint8_t mag_idx = 0;
+    uint16_t mag_idx = 0;
     uint16_t ptr = 0;
     PC_Trans_Buff[ptr++] = 0x55;
     PC_Trans_Buff[ptr++] = 0xaa;
     PC_Trans_Buff[ptr++] = 0xff;
-    PC_Trans_Buff[ptr++] = sensor_num;
+    PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
+    PC_Trans_Buff[ptr++] = (sensor_num >> 8) & 0xff;
 
     memcpy((uint8_t *)&temp, (uint8_t *)&timestamp, 4);
     PC_Trans_Buff[ptr++] = (temp) & 0xff;

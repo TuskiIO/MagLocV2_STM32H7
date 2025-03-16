@@ -31,7 +31,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         SCB_InvalidateDCache_by_Addr((uint32_t *)rx_buf, rx_size);
         rx_size = Size;
         //HAL_UART_Transmit(&hlpuart1, rx_buf, Size, 100);  
-        CDC_Transmit_HS(rx_buf, Size);
+        // CDC_Transmit_HS(rx_buf, Size);
     
         // memset(rx_buf, 0, RX_BUF_SIZE);
         HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
