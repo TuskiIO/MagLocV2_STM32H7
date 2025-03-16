@@ -2,7 +2,6 @@
 #define _SENSOR_DATA_H_
 
 #include "stm32h7xx_hal.h"
-#include <stdbool.h>
 
 #define GET_MAGSENSOR_DATA                  1
 #define INITIAL_GET_NEWLY_PLUGGED_SENSOR    1
@@ -14,13 +13,13 @@
 #define INITIAL_GETUID_DELAY_TIME  50   //factor=100ms
 #define ADD_GETUID_DELAY_TIME      1   //factor=100ms
 
-#define MAG_SENSOR_CONFIG_OFFSET    0x00
-#define MAG_SENSOR_CONFIG_LENGTH    0x46
-#define MAG_SENSOR_DATA_OFFSET      0X46
-#define MAG_SENSOR_DATA_LENGTH      0X30
+#define MAG_SENSOR_CONFIG_OFFSET    0
+#define MAG_SENSOR_CONFIG_LENGTH    70
+#define MAG_SENSOR_DATA_OFFSET      70
+#define MAG_SENSOR_DATA_LENGTH      56  //126-70
 
-#define MAG_SENSOR_MAGADC_OFFSET    0x54
-#define MAG_SENSOR_MAGVAL_OFFSET    0x61
+#define MAG_SENSOR_MAGADC_OFFSET    92
+#define MAG_SENSOR_MAGVAL_OFFSET    105
 
 #define GET_SLAVEID_MAP(idx)    ((slaveID_map[(idx) >> 5] >> ((idx) & 0x1F)) & 0x01)
 #define SET_SLAVEID_MAP(idx)    (slaveID_map[(idx) >> 5] |= (1U << ((idx) & 0x1F)))
@@ -81,26 +80,26 @@ typedef struct {
 typedef struct{
     // read/write registers
     FULL_CFG_t          cfg;                // reg offset =  0(0x00), len = 70 Bytes
-    float               timestamp_ref;      // reg offset = 70(0x46), len =  4 Bytes      // write to this value will sync slave time with ref (with communication delays)
+    uint64_t            timestamp_ref;      // reg offset = 70(0x46), len =  8 Bytes      // write to this value will sync slave time with ref (with communication delays)
     // read-only registers
-    uint32_t            UID32;              // reg offset = 74(0x4A), len =  4 Bytes
-    bool                mag_sensor_DRDY;    // reg offset = 78(0x4E), len =  1 Bytes
-    bool                rm3100_DRDY;        // reg offset = 79(0x4F), len =  1 Bytes
-    float               timestamp;          // reg offset = 80(0x50), len =  4 Bytes      // timestamp in ms when RM3100 finishes measurement
-    int32_t             magADC[3];          // reg offset = 84(0x54), len = 12 Bytes      // Raw magnetometer readings, in LSB counts
+    uint32_t            UID32;              // reg offset = 78(0x4E), len =  4 Bytes
+    uint8_t             mag_sensor_DRDY;    // reg offset = 82(0x52), len =  1 Bytes
+    uint8_t             rm3100_DRDY;        // reg offset = 83(0x53), len =  1 Bytes
+    uint64_t            timestamp;          // reg offset = 84(0x54), len =  8 Bytes      // timestamp in us when RM3100 finishes measurement
+    int32_t             magADC[3];          // reg offset = 92(0x5C), len = 12 Bytes      // Raw magnetometer readings, in LSB counts
     uint8_t             magADC_CRC;         // CRC-8 for magADC data, Motorola, polinomial x^8+x^5+x^4+x^0 (0x31 0b100110001)
-    float               magVal[3];          // reg offset = 97(0x61), len = 12 Bytes      // Calibrated magnet-field intensity, in uT
+    float               magVal[3];          // reg offset =105(0x69), len = 12 Bytes      // Calibrated magnet-field intensity, in uT
     uint8_t             magVal_CRC;         // CRC-8 for magVal data, Motorola, polinomial x^8+x^5+x^4+x^0 (0x31 0b100110001)
-    float               magVal_t;           // reg offset =110(0x6E), len = 4 Bytes       // Calibrated magnet-field total intensity, in uT
-    float               magStd;             // reg offset =114(0x72), len = 4 Bytes       // standard deviation of the magnetic field total intensity
-} MAG_SENSOR_module_t; // size: 118 Bytes
+    float               magVal_t;           // reg offset =118(0x76), len = 4 Bytes       // Calibrated magnet-field total intensity, in uT
+    float               magStd;             // reg offset =122(0x7A), len = 4 Bytes       // standard deviation of the magnetic field total intensity
+} MAG_SENSOR_module_t; // size: 126 Bytes
 
 #pragma pack() //align memory allocation with default strategy
 
 extern volatile float timestamp;
 extern volatile uint32_t TIM2_time_s;
-extern volatile uint16_t sensor_num;
-extern MAG_SENSOR_module_t mag_sensor[];
+extern uint16_t sensor_num;
+extern volatile MAG_SENSOR_module_t mag_sensor[];
 extern uint8_t slaveID_tba;
 extern uint32_t slaveID_map[];
 extern uint8_t PC_Trans_Buff[583];
