@@ -1,11 +1,12 @@
 #include "mag_sensor.h"
 #include "modbus_rtu.h"
 #include "usbd_cdc_if.h"
+#include "cmsis_os.h"
 
 volatile MAG_SENSOR_module_t mag_sensor[MAX_SENSOR_NUM];
 volatile float timestamp;
 volatile uint32_t TIM2_time_s;
-uint16_t sensor_num = 0;
+uint8_t sensor_num = 0;
 uint8_t slaveID_tba;       //slaveID to be allocated
 uint32_t slaveID_map[8] = {0};     //bit map of used slaveID
 extern uint16_t sensor_0xF7_cnt;
@@ -103,7 +104,7 @@ HAL_StatusTypeDef Get_MagSensor_Config(MAG_SENSOR_module_t *sensor){
     // uint8_t rxFrame[256] = {0};
     //get config
     if(Modbus_CMD50_ReadBytes(sensor->cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_CONFIG_LENGTH, (uint8_t*)&sensor->cfg) != HAL_OK){
-        //Handle error
+        //Handle error 
         return HAL_ERROR;
     }
     // memcpy(&mag_sensor[sensor_idx].cfg, rxFrame, MAG_SENSOR_CONFIG_LENGTH);
@@ -121,9 +122,9 @@ HAL_StatusTypeDef Set_MagSensor_Config(MAG_SENSOR_module_t *sensor){
 
 
 HAL_StatusTypeDef Get_MagSensors_Data(void){
-    // osDelay(5);
+    // osDelay(4);
 
-    // //等待mag_sensor_DRDY，多个传感器任意一个DRDY后即开始读数据
+    //等待mag_sensor_DRDY，多个传感器任意一个DRDY后即开始读数据
     uint8_t mag_sensor_rdy = 0;
     do{
         osDelay(1);
@@ -136,8 +137,13 @@ HAL_StatusTypeDef Get_MagSensors_Data(void){
     }while(mag_sensor_rdy != 0x01);
 
     for(uint8_t i=0; i<sensor_num; i++){
-        //get data
-        if(Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET) != HAL_OK){
+        // // get all data
+        // if(Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET) != HAL_OK){
+        //     //Handle error
+        //     continue;
+        // }
+        //get magVal[3]
+        if(Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET) != HAL_OK){
             //Handle error
             continue;
         }
@@ -187,9 +193,36 @@ float Update_TimeStamp_ms(void) {
 }
 
 
-uint8_t PC_Trans_Buff[583] = {0};
+volatile uint8_t PC_Trans_Buff[583] = {0};
 uint16_t PC_TRANS_Assemble(void)
 {
+    // volatile uint32_t temp;
+    // uint16_t mag_idx = 0;
+    // uint16_t ptr = 0;
+    // PC_Trans_Buff[ptr++] = 0x55;
+    // PC_Trans_Buff[ptr++] = 0xaa;
+    // PC_Trans_Buff[ptr++] = 0xff;
+    // PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
+
+    // memcpy((uint8_t *)&temp, (uint8_t *)&timestamp, 4);
+    // PC_Trans_Buff[ptr++] = (temp) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+
+    // for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
+    //     for(uint8_t i = 0; i<3; i++){
+    //         //assemble float magVal[3]
+    //         memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
+    //         PC_Trans_Buff[ptr++] = (temp) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+    //     }
+    // }
+    // return ptr;
+
+    // old data format
     volatile uint32_t temp;
     uint16_t mag_idx = 0;
     uint16_t ptr = 0;
@@ -197,22 +230,15 @@ uint16_t PC_TRANS_Assemble(void)
     PC_Trans_Buff[ptr++] = 0xaa;
     PC_Trans_Buff[ptr++] = 0xff;
     PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
-    PC_Trans_Buff[ptr++] = (sensor_num >> 8) & 0xff;
-
-    memcpy((uint8_t *)&temp, (uint8_t *)&timestamp, 4);
-    PC_Trans_Buff[ptr++] = (temp) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
 
     for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
         for(uint8_t i = 0; i<3; i++){
             //assemble float magVal[3]
             memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
-            PC_Trans_Buff[ptr++] = (temp) & 0xff;
-            PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
-            PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
             PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp >>  8) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp      ) & 0xff;
         }
     }
     return ptr;

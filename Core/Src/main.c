@@ -909,8 +909,10 @@ void StartModbusTask(void *argument)
       key3_pressed = 0;
     }
     #endif
-    
+
+    #if !(GET_MAGSENSOR_DATA)
     osDelay(100);
+    #endif
   }
 
   /* USER CODE END StartModbusTask */

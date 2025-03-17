@@ -98,11 +98,11 @@ typedef struct{
 
 extern volatile float timestamp;
 extern volatile uint32_t TIM2_time_s;
-extern uint16_t sensor_num;
+extern uint8_t sensor_num;
 extern volatile MAG_SENSOR_module_t mag_sensor[];
 extern uint8_t slaveID_tba;
 extern uint32_t slaveID_map[];
-extern uint8_t PC_Trans_Buff[583];
+extern volatile uint8_t PC_Trans_Buff[583];
 
 /**
  * @brief  将所有默认地址的传感器分配slaveID，并修改全局变量sensor_num，将slaveID保存在MAG_SENSOR_Config_t中，初次检测会等待更长时间
