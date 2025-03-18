@@ -30,7 +30,8 @@
 #include "modbus_rtu.h"
 #include "mag_sensor.h"
 #include "ICM42688P.h"
-#include "sensor_DHCP.h"
+// #include "sensor_DHCP.h"
+// #include "config.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -856,7 +857,7 @@ void StartModbusTask(void *argument)
 
   //osDelay(2000);
   //清空rx_buf,开启DMA空闲中断接收
-  //SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
+  // SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
   __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);
 

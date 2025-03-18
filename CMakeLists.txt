@@ -65,6 +65,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ptp/dep/startup.c
     ptp/dep/sys_time.c
     ptp/dep/timer.c
+    config/config.c
     LWIP/App/udp_conn.c
 )
 
@@ -75,6 +76,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ICM42688P
 
     ptp
+    config
 )
 
 # Add project symbols (macros)

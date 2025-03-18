@@ -230,6 +230,7 @@ uint16_t PC_TRANS_Assemble(void)
     PC_Trans_Buff[ptr++] = 0xaa;
     PC_Trans_Buff[ptr++] = 0xff;
     PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
+    PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
 
     for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
         for(uint8_t i = 0; i<3; i++){
