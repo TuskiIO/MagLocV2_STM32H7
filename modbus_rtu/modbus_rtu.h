@@ -14,6 +14,7 @@
 #define REPORT_UID_DELAY_FACTOR 100
 #define MAX_SENSOR_NUM 246  //0xF6
 #define SET_ID_RETRY_TIMES  2
+#define USE_DMA_LPUART_TX   1
 
 extern uint8_t rx_buf[];
 extern uint8_t tx_buf[];
@@ -37,6 +38,8 @@ extern CRC_HandleTypeDef hcrc;
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart);
+
+void delay_us(uint32_t us);
 
 /**
  * @brief 通用函数：发送请求帧并通过DMA接收响应帧，广播帧不回复，其他帧一发一收

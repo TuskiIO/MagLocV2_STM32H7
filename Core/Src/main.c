@@ -82,7 +82,7 @@ osThreadId_t modbusTaskHandle;
 const osThreadAttr_t modbusTask_attributes = {
   .name = "modbusTask",
   .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityAboveNormal1,
+  .priority = (osPriority_t) osPriorityHigh,
 };
 /* Definitions for TriggerTask */
 osThreadId_t TriggerTaskHandle;
@@ -881,7 +881,7 @@ void StartModbusTask(void *argument)
   for (;;){
     #if GET_MAGSENSOR_DATA
     //get sensor data->trigger measure and mark the time
-    Update_TimeStamp_ms();
+    Update_TimeStamp();
     Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
     Get_MagSensors_Data();
 

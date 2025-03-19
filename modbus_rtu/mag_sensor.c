@@ -122,31 +122,33 @@ HAL_StatusTypeDef Set_MagSensor_Config(MAG_SENSOR_module_t *sensor){
 
 
 HAL_StatusTypeDef Get_MagSensors_Data(void){
-    // osDelay(4);
+    osDelay(4);
 
     //等待mag_sensor_DRDY，多个传感器任意一个DRDY后即开始读数据
-    uint8_t mag_sensor_rdy = 0;
-    do{
-        osDelay(1);
-        for(uint8_t i=0; i<sensor_num; i++){
-            Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, offsetof(MAG_SENSOR_module_t, mag_sensor_DRDY), 0x01, &mag_sensor_rdy);
-            if(mag_sensor_rdy == 0x01){
-                break;
-            }
-        }
-    }while(mag_sensor_rdy != 0x01);
-
+    // uint8_t mag_sensor_rdy = 0;
+    // do{
+    //     osDelay(1);
+    //     for(uint8_t i=0; i<sensor_num; i++){
+    //         Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, offsetof(MAG_SENSOR_module_t, mag_sensor_DRDY), 0x01, &mag_sensor_rdy);
+    //         if(mag_sensor_rdy == 0x01){
+    //             break;
+    //         }
+    //     }
+    // }while(mag_sensor_rdy != 0x01);
+    //osDelay(1);
     for(uint8_t i=0; i<sensor_num; i++){
         // // get all data
         // if(Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET) != HAL_OK){
         //     //Handle error
         //     continue;
         // }
-        //get magVal[3]
+        //only get magVal[3]
         if(Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET) != HAL_OK){
             //Handle error
             continue;
         }
+        // HAL_Delay(1);
+        delay_us(5);
     }
     return HAL_OK;
 }
@@ -167,6 +169,7 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
             //记录slaveID
             mag_sensor[sensor_num].cfg.mag_sensor_cfg.mb_slave_id = temp_slaveID;
             sensor_num++;
+            delay_us(100);
             #if USE_USB_PRINTF
             usb_printf("Sensor index: %d; SlaveID: %x\n", sensor_num, temp_slaveID);
             #endif
@@ -187,7 +190,7 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
     return HAL_OK;
 }
 
-float Update_TimeStamp_ms(void) {
+float Update_TimeStamp(void) {
     timestamp = (float)TIM2_time_s + (float)(TIM2->CNT)/1000000.0f;
     return timestamp;
 }

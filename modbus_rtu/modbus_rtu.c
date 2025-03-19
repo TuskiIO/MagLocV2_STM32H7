@@ -10,12 +10,22 @@ __attribute__((aligned(32))) uint8_t tx_buf[TX_BUF_SIZE] __attribute__((section(
 uint16_t rx_size = 0;
 uint16_t sensor_0xF7_cnt = 0;
 uint8_t *sensor_UID[MAX_SENSOR_NUM];
+extern TIM_HandleTypeDef htim2;
 
 static osSemaphoreId_t modbusSemaphoreHandle = NULL;
 const osSemaphoreAttr_t modbusSemaphore_attr = {
     .name = "ModbusSem"
 };
 
+//微秒级延时，最大1s
+void delay_us(uint32_t us) {
+    uint32_t start = TIM2->CNT;
+    uint32_t ticks = us * 240; // 240MHz时钟
+    
+    while ((TIM2->CNT - start) < ticks) {
+        __ASM volatile ("nop");
+    }
+}
 
 /**
  * @brief UART接收完成回调函数（中断方式）
@@ -27,9 +37,9 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if(huart->Instance == hlpuart1.Instance)
     {   
-        //刷新缓存，避免优化导致rx_buf不更新
-        SCB_InvalidateDCache_by_Addr((uint32_t *)rx_buf, rx_size);
         rx_size = Size;
+        //刷新缓存，避免优化导致rx_buf不更新
+        SCB_InvalidateDCache_by_Addr((uint32_t *)rx_buf, RX_BUF_SIZE);
         //HAL_UART_Transmit(&hlpuart1, rx_buf, Size, 100);  
         // CDC_Transmit_HS(rx_buf, Size);
     
@@ -55,9 +65,14 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
  */
 HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *txFrame, uint16_t txLen, uint8_t *rxFrame)
 {
-
-    //Modbus_Transmit_wCRC(txFrame,txLen);
+    #if USE_DMA_LPUART_TX
+    while(hlpuart1.gState != HAL_UART_STATE_READY);
+    memcpy(tx_buf, txFrame, txLen);
+    SCB_CleanInvalidateDCache_by_Addr((uint32_t *)tx_buf, txLen);
+    HAL_StatusTypeDef status = HAL_UART_Transmit_DMA(&hlpuart1, tx_buf, txLen);
+    #else
     HAL_StatusTypeDef status = HAL_UART_Transmit(&hlpuart1, txFrame, txLen, 100);
+    #endif
     if (status != HAL_OK){
         return status;
     }
@@ -75,7 +90,7 @@ HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *txFrame, uint16_t txLen, ui
         }
     }
 
-    /* 阻塞等待DMA接收完成（超时100ms，可根据需要调整） */
+    /* 阻塞等待DMA接收完成（超时10ms，可根据需要调整） */
     if (osSemaphoreAcquire(modbusSemaphoreHandle, RX_TIMEOUT) != osOK){
         return HAL_TIMEOUT;
     }

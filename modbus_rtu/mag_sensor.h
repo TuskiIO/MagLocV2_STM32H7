@@ -152,6 +152,6 @@ uint16_t PC_TRANS_Assemble(void);
  * @brief  更新timestamp    
  * @retval 当前时间值(s)
  */
- float Update_TimeStamp_ms(void);
+ float Update_TimeStamp(void);
 
 #endif
