@@ -3,13 +3,12 @@
 #include "usbd_cdc_if.h"
 #include "cmsis_os.h"
 
-volatile MAG_SENSOR_module_t mag_sensor[MAX_SENSOR_NUM];
+MAG_SENSOR_module_t mag_sensor[MAX_SENSOR_NUM];
 volatile float timestamp;
 volatile uint32_t TIM2_time_s;
 uint8_t sensor_num = 0;
 uint8_t slaveID_tba;       //slaveID to be allocated
 uint32_t slaveID_map[8] = {0};     //bit map of used slaveID
-extern uint16_t sensor_0xF7_cnt;
 
 static void Init_SlaveID_Map(void) {
     memset((void*)slaveID_map, 0, sizeof(slaveID_map));
@@ -122,33 +121,30 @@ HAL_StatusTypeDef Set_MagSensor_Config(MAG_SENSOR_module_t *sensor){
 
 
 HAL_StatusTypeDef Get_MagSensors_Data(void){
-    osDelay(4);
+    #if USE_MAG_SENSOR_DRDY// 等待mag_sensor_DRDY，多个传感器任意一个DRDY后即开始读数据
+    uint8_t mag_sensor_rdy = 0;
+    do{
+        osDelay(1);
+        for(uint8_t i=0; i<sensor_num; i++){
+            Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, offsetof(MAG_SENSOR_module_t, mag_sensor_DRDY), 0x01, &mag_sensor_rdy);
+            if(mag_sensor_rdy == 0x01){
+                break;
+            }
+        }
+    }while(mag_sensor_rdy != 0x01);
+    #endif
 
-    //等待mag_sensor_DRDY，多个传感器任意一个DRDY后即开始读数据
-    // uint8_t mag_sensor_rdy = 0;
-    // do{
-    //     osDelay(1);
-    //     for(uint8_t i=0; i<sensor_num; i++){
-    //         Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, offsetof(MAG_SENSOR_module_t, mag_sensor_DRDY), 0x01, &mag_sensor_rdy);
-    //         if(mag_sensor_rdy == 0x01){
-    //             break;
-    //         }
-    //     }
-    // }while(mag_sensor_rdy != 0x01);
-    //osDelay(1);
     for(uint8_t i=0; i<sensor_num; i++){
-        // // get all data
-        // if(Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET) != HAL_OK){
-        //     //Handle error
-        //     continue;
-        // }
-        //only get magVal[3]
-        if(Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET) != HAL_OK){
+        #if ONLY_GET_SENSOR_MAGVAL  //only get magVal[3]
+        HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET);
+        #else                       // get all data
+        HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET);
+        #endif
+        if(state != HAL_OK){
             //Handle error
             continue;
         }
-        // HAL_Delay(1);
-        delay_us(5);
+        delay_us(10);
     }
     return HAL_OK;
 }
@@ -196,7 +192,7 @@ float Update_TimeStamp(void) {
 }
 
 
-volatile uint8_t PC_Trans_Buff[583] = {0};
+uint8_t PC_Trans_Buff[583] = {0};
 uint16_t PC_TRANS_Assemble(void)
 {
     // volatile uint32_t temp;

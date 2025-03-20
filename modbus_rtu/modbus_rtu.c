@@ -10,6 +10,9 @@ __attribute__((aligned(32))) uint8_t tx_buf[TX_BUF_SIZE] __attribute__((section(
 uint16_t rx_size = 0;
 uint16_t sensor_0xF7_cnt = 0;
 uint8_t *sensor_UID[MAX_SENSOR_NUM];
+uint8_t txFrame[256] = {0};
+uint8_t rxFrame[256] = {0};
+volatile uint32_t RS485_RX_flag;
 extern TIM_HandleTypeDef htim2;
 
 static osSemaphoreId_t modbusSemaphoreHandle = NULL;
@@ -18,12 +21,12 @@ const osSemaphoreAttr_t modbusSemaphore_attr = {
 };
 
 //微秒级延时，最大1s
-void delay_us(uint32_t us) {
-    uint32_t start = TIM2->CNT;
-    uint32_t ticks = us * 240; // 240MHz时钟
+void delay_us(uint16_t us) {
+    uint16_t start = TIM4->CNT;
+    uint16_t ticks = us; // 240MHz时钟
     
-    while ((TIM2->CNT - start) < ticks) {
-        __ASM volatile ("nop");
+    while ((TIM4->CNT - start) < ticks) {
+        __NOP();
     }
 }
 
@@ -40,13 +43,15 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         rx_size = Size;
         //刷新缓存，避免优化导致rx_buf不更新
         SCB_InvalidateDCache_by_Addr((uint32_t *)rx_buf, RX_BUF_SIZE);
-        //HAL_UART_Transmit(&hlpuart1, rx_buf, Size, 100);  
+        // HAL_UART_Transmit(&hlpuart1, rx_buf, Size, 100);  
         // CDC_Transmit_HS(rx_buf, Size);
-    
-        // memset(rx_buf, 0, RX_BUF_SIZE);
         HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
         __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);		   // 手动关闭DMA_IT_HT中断
+        #if RS485_RX_USE_RTOS_SEMAPHORE
         osSemaphoreRelease(modbusSemaphoreHandle);
+        #else
+        RS485_RX_flag = 1;
+        #endif
     }
 }
 
@@ -56,58 +61,75 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         // memset(rx_buf, 0, RX_BUF_SIZE);
         HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE); // 接收发生错误后重启
 		__HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);		   // 手动关闭DMA_IT_HT中断
+        #if RS485_RX_USE_RTOS_SEMAPHORE
         osSemaphoreRelease(modbusSemaphoreHandle);
+        #else
+        RS485_RX_flag = 1;
+        #endif
     }
 }
 
 /**
  * @brief 通用函数：发送请求帧并通过DMA接收响应帧
  */
-HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *txFrame, uint16_t txLen, uint8_t *rxFrame)
+HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *tx_frame, uint16_t txLen, uint8_t *rx_frame)
 {
-    #if USE_DMA_LPUART_TX
+    RS485_RX_flag = 0;
+    #if RX485_TX_USE_DMA
     while(hlpuart1.gState != HAL_UART_STATE_READY);
-    memcpy(tx_buf, txFrame, txLen);
+    memcpy(tx_buf, tx_frame, txLen);
     SCB_CleanInvalidateDCache_by_Addr((uint32_t *)tx_buf, txLen);
     HAL_StatusTypeDef status = HAL_UART_Transmit_DMA(&hlpuart1, tx_buf, txLen);
     #else
-    HAL_StatusTypeDef status = HAL_UART_Transmit(&hlpuart1, txFrame, txLen, 100);
+    HAL_StatusTypeDef status = HAL_UART_Transmit(&hlpuart1, tx_frame, txLen, 100);
     #endif
     if (status != HAL_OK){
         return status;
     }
 
     /*boardcast frame no need reply*/
-    if(txFrame[0] == MB_Broadcast_ID){
-        memcpy(rxFrame, txFrame, txLen);
+    if(tx_frame[0] == MB_Broadcast_ID){
+        memcpy(rx_frame, tx_frame, txLen);
         return HAL_OK;
     }
 
+    #if RS485_RX_USE_RTOS_SEMAPHORE
     if (modbusSemaphoreHandle == NULL){
         modbusSemaphoreHandle = osSemaphoreNew(1, 0, &modbusSemaphore_attr);
         if (modbusSemaphoreHandle == NULL){
             return HAL_ERROR;
         }
     }
-
+    
     /* 阻塞等待DMA接收完成（超时10ms，可根据需要调整） */
     if (osSemaphoreAcquire(modbusSemaphoreHandle, RX_TIMEOUT) != osOK){
         return HAL_TIMEOUT;
     }
+    #else
+    uint16_t cnt = TIM4->CNT;
+    while(RS485_RX_flag == 0){
+        if((uint16_t)(TIM4->CNT - cnt) > 1000*RX_TIMEOUT_MS)
+            return HAL_TIMEOUT;
+        __NOP();
+    }
+    // while((RS485_RX_flag == 0) && (cnt++ < 160000*RX_TIMEOUT_MS));
+    // if (cnt>=160000*RX_TIMEOUT_MS){
+    //     return HAL_TIMEOUT;
+    // }
+    #endif
 
     if(rx_size>RX_BUF_SIZE){
         return HAL_ERROR;
     }
-    memcpy(rxFrame,rx_buf,rx_size);
+    memcpy(rx_frame,rx_buf,rx_size);
     return HAL_OK;
 }
+
 
 /* CMD0x50：读字节 */
 HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uint8_t data_length, uint8_t *pData)
 {
-    uint8_t txFrame[6];
-    uint8_t rxFrame[256] = {0};
-
+    uint16_t txLen = 6;
     /* 构造请求帧: [slaveId, 0x50, start_reg, data_length, CRC低, CRC高] */
     txFrame[0] = slaveId;
     txFrame[1] = 0x50;
@@ -120,7 +142,7 @@ HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uin
     /* 计算预期响应帧长度: slaveId + func + data_length字节计数 + 数据(data_length) + CRC(2) */
     //uint16_t rxLen = 1 + 1 + 1 + data_length + 2;
 
-    if(Modbus_Master_SendReceive(txFrame, sizeof(txFrame), rxFrame) == HAL_TIMEOUT){
+    if(Modbus_Master_SendReceive(txFrame, txLen, rxFrame) == HAL_TIMEOUT){
         return HAL_TIMEOUT;
     }
 
@@ -142,7 +164,6 @@ HAL_StatusTypeDef Modbus_CMD50_ReadBytes(uint8_t slaveId, uint8_t start_reg, uin
 /* CMD0x51：写字节（写操作回显） */
 HAL_StatusTypeDef Modbus_CMD51_WriteBytes(uint8_t slaveId, uint8_t start_reg, uint8_t data_length, uint8_t *pData)
 {
-    uint8_t txFrame[256];
     /* 构造请求帧: [slaveId, 0x51, start_reg, data_length, data..., CRC低, CRC高] */
     uint16_t txLen = 4 + data_length;
 
@@ -156,7 +177,6 @@ HAL_StatusTypeDef Modbus_CMD51_WriteBytes(uint8_t slaveId, uint8_t start_reg, ui
     txFrame[txLen++] = (uint8_t)(crc >> 8);
 
     /* 预期响应帧与请求帧一致 */
-    uint8_t rxFrame[256] = {0};
     if(Modbus_Master_SendReceive(txFrame, txLen, rxFrame) == HAL_TIMEOUT){
         return HAL_TIMEOUT;
     }
@@ -172,8 +192,9 @@ HAL_StatusTypeDef Modbus_CMD51_WriteBytes(uint8_t slaveId, uint8_t start_reg, ui
 /* CMD0x60：触发测量 */
 HAL_StatusTypeDef Modbus_CMD60_TriggerMeasurement(uint8_t slaveId)
 {
-    uint8_t txFrame[4];
     /* 构造请求帧: [slaveId, 0x60, CRC低, CRC高] */
+    uint16_t txLen = 4;
+
     txFrame[0] = slaveId;
     txFrame[1] = 0x60;
     uint16_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)txFrame, 2);
@@ -181,12 +202,12 @@ HAL_StatusTypeDef Modbus_CMD60_TriggerMeasurement(uint8_t slaveId)
     txFrame[3] = (uint8_t)(crc >> 8);
         
     /* 预期响应帧与请求帧一致 */
-    uint8_t rxFrame[4] = {0};
-    if(Modbus_Master_SendReceive(txFrame, sizeof(txFrame), rxFrame) == HAL_TIMEOUT){
+    if(Modbus_Master_SendReceive(txFrame, txLen, rxFrame) == HAL_TIMEOUT){
         return HAL_TIMEOUT;
     }
+    // delay_us(50);
 
-    if (memcmp(txFrame, rxFrame, sizeof(txFrame)) != 0){
+    if (memcmp(txFrame, rxFrame, txLen) != 0){
         return HAL_ERROR;
     }
     return HAL_OK;
@@ -195,8 +216,9 @@ HAL_StatusTypeDef Modbus_CMD60_TriggerMeasurement(uint8_t slaveId)
 /* CMD0x61：请求回报UID */
 HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UID8_upper, uint8_t delay_max, uint8_t UID_length)
 {
-    uint8_t txFrame[11];
     /* 构造请求帧: [slaveId, 0x61, 8bit_UID_Lower, 8bit_UID_Upper, delay_min, delay_max, return_UID_length, CRC低, CRC高] */
+    uint16_t txLen = 11;
+
     txFrame[0] = MB_Temp_ID;
     txFrame[1] = 0x61;
     txFrame[2] = UID8_lower;
@@ -219,10 +241,15 @@ HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UI
             sensor_UID[i] = NULL;
         }
     }
-    HAL_UART_Transmit(&hlpuart1, txFrame, sizeof(txFrame), 100);
+    #if RX485_TX_USE_DMA
+    while(hlpuart1.gState != HAL_UART_STATE_READY);
+    memcpy(tx_buf, txFrame, txLen);
+    SCB_CleanInvalidateDCache_by_Addr((uint32_t *)tx_buf, txLen);
+    HAL_UART_Transmit_DMA(&hlpuart1, tx_buf, txLen);
+    #else
+    HAL_UART_Transmit(&hlpuart1, txFrame, txLen, 100);
+    #endif
  
-
-    uint8_t rxFrame[RX_BUF_SIZE];
     /*等待delay_max*FACTOR(100ms)时间接收帧，每接收一个刷新时间*/
     while(osSemaphoreAcquire(modbusSemaphoreHandle, delay_max*REPORT_UID_DELAY_FACTOR) == osOK){
         memcpy(rxFrame, rx_buf, rx_size);
@@ -252,7 +279,6 @@ HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UI
 /* CMD0x62：根据UID设置从机地址 */
 HAL_StatusTypeDef Modbus_CMD62_BroadcastSetSlaveID(uint8_t UID_length, uint8_t *pUID, uint8_t new_slave_id)
 {
-    uint8_t txFrame[256];
     /* 构造请求帧: [BoardcastId, 0x62, UID_length, UID数据（高字节先），new_slave_id, CRC低, CRC高] */
     uint16_t txLen = 3 + UID_length + 1;
 
@@ -268,7 +294,6 @@ HAL_StatusTypeDef Modbus_CMD62_BroadcastSetSlaveID(uint8_t UID_length, uint8_t *
 
     /* 预期响应帧为回显请求帧 */
     uint16_t rxLen = txLen;
-    uint8_t rxFrame[256] = {0};
     Modbus_Master_SendReceive(txFrame, txLen, rxFrame);
     if (memcmp(txFrame, rxFrame, rxLen) != 0){
         return HAL_ERROR;

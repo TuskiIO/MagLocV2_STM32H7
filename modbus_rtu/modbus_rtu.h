@@ -5,7 +5,9 @@
 
 #define RX_BUF_SIZE 256
 #define TX_BUF_SIZE 256
-#define RX_TIMEOUT 10
+#define RX_TIMEOUT_MS  5   //10ms  //max 65ms
+#define RX485_TX_USE_DMA            1
+#define RS485_RX_USE_RTOS_SEMAPHORE 0
 
 #define MB_Broadcast_ID 0x00
 #define MB_Temp_ID 0xF7
@@ -14,7 +16,6 @@
 #define REPORT_UID_DELAY_FACTOR 100
 #define MAX_SENSOR_NUM 246  //0xF6
 #define SET_ID_RETRY_TIMES  2
-#define USE_DMA_LPUART_TX   1
 
 extern uint8_t rx_buf[];
 extern uint8_t tx_buf[];
@@ -39,7 +40,7 @@ extern CRC_HandleTypeDef hcrc;
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart);
 
-void delay_us(uint32_t us);
+void delay_us(uint16_t us);
 
 /**
  * @brief 通用函数：发送请求帧并通过DMA接收响应帧，广播帧不回复，其他帧一发一收

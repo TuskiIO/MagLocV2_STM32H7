@@ -13,6 +13,9 @@
 #define INITIAL_GETUID_DELAY_TIME  50   //factor=100ms
 #define ADD_GETUID_DELAY_TIME      1   //factor=100ms
 
+#define USE_MAG_SENSOR_DRDY         0
+#define ONLY_GET_SENSOR_MAGVAL      1
+
 #define MAG_SENSOR_CONFIG_OFFSET    0
 #define MAG_SENSOR_CONFIG_LENGTH    70
 #define MAG_SENSOR_DATA_OFFSET      70
@@ -30,10 +33,10 @@
 // magnetometer continuous measurement rate(approximate, to set the TMRC register value at 0x0B)
 // update rate is restricted by cycle counts
 // for 3-axis measurement:
-// cycle count = 300 >>>>>> max update rate = 100Hz, Gain = 113 LSB/uT
-// cycle count = 200 >>>>>> max update rate = 150Hz, Gain =  75 LSB/uT
-// cycle count = 150 >>>>>> max update rate = 200Hz, Gain =  57 LSB/uT
-// cycle count = 100 >>>>>> max update rate = 300Hz, Gain =  38 LSB/uT
+// cycle count = 300 >>>>>> measure time = 9.2ms, max update rate = 100Hz, Gain = 113 LSB/uT
+// cycle count = 200 >>>>>> measure time = 6.2ms, max update rate = 150Hz, Gain =  75 LSB/uT
+// cycle count = 150 >>>>>> measure time = 4.6ms, max update rate = 200Hz, Gain =  57 LSB/uT
+// cycle count = 100 >>>>>> measure time = 3.2ms, max update rate = 300Hz, Gain =  38 LSB/uT
 typedef enum{
     RM3100_CMM_RATE_600 = 0x92,
     RM3100_CMM_RATE_300 = 0x93,
@@ -99,10 +102,10 @@ typedef struct{
 extern volatile float timestamp;
 extern volatile uint32_t TIM2_time_s;
 extern uint8_t sensor_num;
-extern volatile MAG_SENSOR_module_t mag_sensor[];
+extern MAG_SENSOR_module_t mag_sensor[];
 extern uint8_t slaveID_tba;
 extern uint32_t slaveID_map[];
-extern volatile uint8_t PC_Trans_Buff[583];
+extern uint8_t PC_Trans_Buff[583];
 
 /**
  * @brief  将所有默认地址的传感器分配slaveID，并修改全局变量sensor_num，将slaveID保存在MAG_SENSOR_Config_t中，初次检测会等待更长时间

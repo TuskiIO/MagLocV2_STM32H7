@@ -62,6 +62,7 @@ SPI_HandleTypeDef hspi3;
 SPI_HandleTypeDef hspi4;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim4;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -81,15 +82,8 @@ const osThreadAttr_t adcTask_attributes = {
 osThreadId_t modbusTaskHandle;
 const osThreadAttr_t modbusTask_attributes = {
   .name = "modbusTask",
-  .stack_size = 512 * 4,
+  .stack_size = 2048 * 4,
   .priority = (osPriority_t) osPriorityHigh,
-};
-/* Definitions for TriggerTask */
-osThreadId_t TriggerTaskHandle;
-const osThreadAttr_t TriggerTask_attributes = {
-  .name = "TriggerTask",
-  .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* USER CODE BEGIN PV */
 uint8_t key3_pressed;
@@ -107,10 +101,10 @@ static void MX_SPI3_Init(void);
 static void MX_SPI4_Init(void);
 static void MX_ADC3_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM4_Init(void);
 void StartDefaultTask(void *argument);
 void StartAdcTask(void *argument);
 void StartModbusTask(void *argument);
-void StartTriggerTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -171,6 +165,7 @@ int main(void)
   MX_SPI4_Init();
   MX_ADC3_Init();
   MX_TIM2_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
   ICM42688_Init();
@@ -204,13 +199,10 @@ int main(void)
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* creation of adcTask */
-  adcTaskHandle = osThreadNew(StartAdcTask, NULL, &adcTask_attributes);
+  // adcTaskHandle = osThreadNew(StartAdcTask, NULL, &adcTask_attributes);
 
   /* creation of modbusTask */
   modbusTaskHandle = osThreadNew(StartModbusTask, NULL, &modbusTask_attributes);
-
-  /* creation of TriggerTask */
-  // TriggerTaskHandle = osThreadNew(StartTriggerTask, NULL, &TriggerTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -618,6 +610,66 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 239;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 65535;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+  __HAL_TIM_SET_COUNTER(&htim4, 0);		// clear timer conter
+  __HAL_TIM_ENABLE(&htim4);				// enable timer
+  /* USER CODE END TIM4_Init 2 */
+  HAL_TIM_MspPostInit(&htim4);
+
+}
+
+/**
   * Enable DMA controller clock
   */
 static void MX_BDMA_Init(void)
@@ -697,8 +749,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SWIO1_Pin SWIO2_Pin SWIO3_Pin */
-  GPIO_InitStruct.Pin = SWIO1_Pin|SWIO2_Pin|SWIO3_Pin;
+  /*Configure GPIO pins : SWIO2_Pin SWIO3_Pin */
+  GPIO_InitStruct.Pin = SWIO2_Pin|SWIO3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
@@ -778,10 +830,10 @@ void StartDefaultTask(void *argument)
 {
   /* init code for LWIP */
   MX_LWIP_Init();
-
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
+  UNUSED(argument);
   ptpd_init();
   osDelay(1000);
   /* Infinite loop */
@@ -801,7 +853,7 @@ void StartDefaultTask(void *argument)
     // ptpd_task();
     // updatePTPTimers();
     // osDelay(1);
-    osDelay(500);
+    osDelay(1000);
   }
 
   /* USER CODE END 5 */
@@ -817,23 +869,23 @@ void StartDefaultTask(void *argument)
 void StartAdcTask(void *argument)
 {
   /* USER CODE BEGIN StartAdcTask */
-  /* Infinite loop */
-  uint16_t TS_CAL1, TS_CAL2;
-  uint32_t adc_value;
-  float cpu_temp = 0;
-  TS_CAL1 = *(__IO uint16_t *)(0x1FF1E820);
-	TS_CAL2 = *(__IO uint16_t *)(0x1FF1E840);
-  for(;;)
-  {
-    HAL_ADC_Start(&hadc3);	//启动ADC转换
-	  HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
-	  adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
-    cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
-    #if USE_USB_PRINTF
-    //usb_printf("cpu_temp: %lf\n", cpu_temp);
-    #endif
-    osDelay(500);
-  }
+  UNUSED(argument);
+  // uint16_t TS_CAL1, TS_CAL2;
+  // uint32_t adc_value;
+  // float cpu_temp = 0;
+  // TS_CAL1 = *(__IO uint16_t *)(0x1FF1E820);
+	// TS_CAL2 = *(__IO uint16_t *)(0x1FF1E840);
+  // for(;;)
+  // {
+  //   HAL_ADC_Start(&hadc3);	//启动ADC转换
+	//   HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
+	//   adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
+  //   cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
+  //   #if USE_USB_PRINTF
+  //   //usb_printf("cpu_temp: %lf\n", cpu_temp);
+  //   #endif
+  //   osDelay(500);
+  // }
   /* USER CODE END StartAdcTask */
 }
 
@@ -847,6 +899,7 @@ void StartAdcTask(void *argument)
 void StartModbusTask(void *argument)
 {
   /* USER CODE BEGIN StartModbusTask */
+  UNUSED(argument);
   #if AUTO_GET_NEWLY_PLUGGED_SENSOR
   uint8_t current_sensor_num;
   #endif
@@ -854,8 +907,8 @@ void StartModbusTask(void *argument)
   #if GET_MAGSENSOR_DATA
   uint16_t PC_buf_size=0;
   #endif
+  uint16_t led_cnt = 0;
 
-  //osDelay(2000);
   //清空rx_buf,开启DMA空闲中断接收
   // SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
@@ -876,22 +929,29 @@ void StartModbusTask(void *argument)
   //更新配置
   for(uint8_t i=0; i<sensor_num; i++){
     Get_MagSensor_Config(&mag_sensor[i]);
+    osDelay(1);
   }
+  Update_TimeStamp();
 
   for (;;){
-    #if GET_MAGSENSOR_DATA
-    //get sensor data->trigger measure and mark the time
-    Update_TimeStamp();
+    #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
     Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
+    #if !(USE_MAG_SENSOR_DRDY)
+    osDelay(5);
+    #endif
     Get_MagSensors_Data();
-
     //send to PC
     PC_buf_size = PC_TRANS_Assemble();
     CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
     #endif
 
-    //检测新添加的传感器，增加检测uid会等待较短时间ADD_GETUID_DELAY_TIME*REPORT_UID_DELAY_FACTOR=1*100ms
-    #if AUTO_GET_NEWLY_PLUGGED_SENSOR
+    led_cnt++;
+    if(led_cnt > 100 ){
+      HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
+      led_cnt = 0;
+    }
+    
+    #if AUTO_GET_NEWLY_PLUGGED_SENSOR //检测新添加的传感器，增加检测uid会等待较短时间ADD_GETUID_DELAY_TIME*REPORT_UID_DELAY_FACTOR=1*100ms
     current_sensor_num=sensor_num;
     if(Get_MagSensors_Plugged() == HAL_OK){
       for(uint8_t i=current_sensor_num; i<sensor_num; i++){
@@ -919,37 +979,11 @@ void StartModbusTask(void *argument)
   /* USER CODE END StartModbusTask */
 }
 
-/* USER CODE BEGIN Header_StartTriggerTask */
-/**
-* @brief Function implementing the triggerTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartTriggerTask */
-void StartTriggerTask(void *argument)
-{
-  /* USER CODE BEGIN StartTriggerTask */
-  /* Infinite loop */
-  osDelay(4000);
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-  const TickType_t xDelay5ms = pdMS_TO_TICKS(5);
-  int trigger_cnt = 0;
-  for(;;)
-  {
-    if (trigger_cnt % 4 == 0){
-      HAL_GPIO_TogglePin(TRG_1_GPIO_Port, TRG_1_Pin);
-    }
-    ++trigger_cnt;
-    vTaskDelayUntil(&xLastWakeTime, xDelay5ms);
-  }
-  /* USER CODE END StartTriggerTask */
-}
-
  /* MPU Configuration */
 
 void MPU_Config(void)
 {
-  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+   MPU_Region_InitTypeDef MPU_InitStruct = {0};
 
   /* Disables the MPU */
   HAL_MPU_Disable();
