@@ -10,7 +10,7 @@
 #define PRESS_KEY_B2_SET_SLAVEID  0
 #define PRESS_KEY_B2_SET_SLAVEID_ADDRESS 0x02
 
-#define INITIAL_GETUID_DELAY_TIME  50   //factor=100ms
+#define INITIAL_GETUID_DELAY_TIME  100   //factor=100ms
 #define ADD_GETUID_DELAY_TIME      1   //factor=100ms
 
 #define USE_MAG_SENSOR_DRDY         0

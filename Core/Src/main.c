@@ -937,7 +937,10 @@ void StartModbusTask(void *argument)
     #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
     Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
     #if !(USE_MAG_SENSOR_DRDY)
+    // TickType_t xStartTime = xTaskGetTickCount();
     osDelay(5);
+    // TickType_t xEndTime = xTaskGetTickCount();
+    // usb_printf("real delay time of osDelay5: %d\n", xEndTime-xStartTime);
     #endif
     Get_MagSensors_Data();
     //send to PC
@@ -972,7 +975,7 @@ void StartModbusTask(void *argument)
     #endif
 
     #if !(GET_MAGSENSOR_DATA)
-    osDelay(100);
+    osDelay(5);
     #endif
   }
 

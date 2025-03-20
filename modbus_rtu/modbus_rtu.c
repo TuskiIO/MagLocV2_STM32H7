@@ -15,10 +15,12 @@ uint8_t rxFrame[256] = {0};
 volatile uint32_t RS485_RX_flag;
 extern TIM_HandleTypeDef htim2;
 
+#if RS485_RX_USE_RTOS_SEMAPHORE
 static osSemaphoreId_t modbusSemaphoreHandle = NULL;
 const osSemaphoreAttr_t modbusSemaphore_attr = {
     .name = "ModbusSem"
 };
+#endif
 
 //微秒级延时，最大1s
 void delay_us(uint16_t us) {
@@ -28,6 +30,24 @@ void delay_us(uint16_t us) {
     while ((TIM4->CNT - start) < ticks) {
         __NOP();
     }
+}
+
+/**
+ * @brief 堵塞等待RS485_RX_flag置1，替代osSemaphoreAcquire功能
+ * @param timeout_ms        堵塞等待时间，超时输出timeout_ms
+ * @retval osOK             接收到RS485_RX_flag == 1
+ * @retval osErrorTimeout   timeout_ms时间内未收到RS485_RX_flag == 1
+ */
+static osStatus_t RS485_RX_flag_Acquire(uint32_t timeout_ms){
+    RS485_RX_flag = 0;
+    uint32_t start = HAL_GetTick();
+    while (RS485_RX_flag == 0) {
+        if((uint32_t)(HAL_GetTick() - start) > timeout_ms){
+            return osErrorTimeout;
+        }
+        __NOP();
+    }
+    return osOK;
 }
 
 /**
@@ -44,7 +64,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         //刷新缓存，避免优化导致rx_buf不更新
         SCB_InvalidateDCache_by_Addr((uint32_t *)rx_buf, RX_BUF_SIZE);
         // HAL_UART_Transmit(&hlpuart1, rx_buf, Size, 100);  
-        // CDC_Transmit_HS(rx_buf, Size);
+        CDC_Transmit_HS(rx_buf, Size);
         HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
         __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);		   // 手动关闭DMA_IT_HT中断
         #if RS485_RX_USE_RTOS_SEMAPHORE
@@ -74,7 +94,6 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
  */
 HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *tx_frame, uint16_t txLen, uint8_t *rx_frame)
 {
-    RS485_RX_flag = 0;
     #if RX485_TX_USE_DMA
     while(hlpuart1.gState != HAL_UART_STATE_READY);
     memcpy(tx_buf, tx_frame, txLen);
@@ -102,20 +121,13 @@ HAL_StatusTypeDef Modbus_Master_SendReceive(uint8_t *tx_frame, uint16_t txLen, u
     }
     
     /* 阻塞等待DMA接收完成（超时10ms，可根据需要调整） */
-    if (osSemaphoreAcquire(modbusSemaphoreHandle, RX_TIMEOUT) != osOK){
+    if (osSemaphoreAcquire(modbusSemaphoreHandle, RX_TIMEOUT_MS) != osOK){
         return HAL_TIMEOUT;
     }
     #else
-    uint16_t cnt = TIM4->CNT;
-    while(RS485_RX_flag == 0){
-        if((uint16_t)(TIM4->CNT - cnt) > 1000*RX_TIMEOUT_MS)
-            return HAL_TIMEOUT;
-        __NOP();
+    if (RS485_RX_flag_Acquire(RX_TIMEOUT_MS) != osOK){
+        return HAL_TIMEOUT;
     }
-    // while((RS485_RX_flag == 0) && (cnt++ < 160000*RX_TIMEOUT_MS));
-    // if (cnt>=160000*RX_TIMEOUT_MS){
-    //     return HAL_TIMEOUT;
-    // }
     #endif
 
     if(rx_size>RX_BUF_SIZE){
@@ -249,11 +261,14 @@ HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UI
     #else
     HAL_UART_Transmit(&hlpuart1, txFrame, txLen, 100);
     #endif
- 
+    
     /*等待delay_max*FACTOR(100ms)时间接收帧，每接收一个刷新时间*/
+    #if RS485_RX_USE_RTOS_SEMAPHORE
     while(osSemaphoreAcquire(modbusSemaphoreHandle, delay_max*REPORT_UID_DELAY_FACTOR) == osOK){
+    #else
+    while(RS485_RX_flag_Acquire(delay_max*REPORT_UID_DELAY_FACTOR) == osOK){   
+    #endif 
         memcpy(rxFrame, rx_buf, rx_size);
-
         /* 预期响应帧长度: slaveId + func + Return_UID_Length + UID数据(UID_length) + CRC(2) */
         if (rx_size != 1+1+1+UID_length+2){
             continue;
@@ -272,7 +287,6 @@ HAL_StatusTypeDef Modbus_CMD61_BroadcastReportUID(uint8_t UID8_lower, uint8_t UI
     if(sensor_0xF7_cnt != 0){
         return HAL_OK;
     }
-    
     return HAL_TIMEOUT;
 }
 

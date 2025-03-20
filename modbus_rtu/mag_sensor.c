@@ -100,13 +100,11 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
 }
 
 HAL_StatusTypeDef Get_MagSensor_Config(MAG_SENSOR_module_t *sensor){
-    // uint8_t rxFrame[256] = {0};
     //get config
     if(Modbus_CMD50_ReadBytes(sensor->cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_CONFIG_LENGTH, (uint8_t*)&sensor->cfg) != HAL_OK){
         //Handle error 
         return HAL_ERROR;
     }
-    // memcpy(&mag_sensor[sensor_idx].cfg, rxFrame, MAG_SENSOR_CONFIG_LENGTH);
     return HAL_OK;
 }
 
