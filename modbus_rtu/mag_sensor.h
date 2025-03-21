@@ -3,7 +3,7 @@
 
 #include "stm32h7xx_hal.h"
 
-#define GET_MAGSENSOR_DATA                  1
+#define GET_MAGSENSOR_DATA                  0
 #define INITIAL_GET_NEWLY_PLUGGED_SENSOR    1
 #define AUTO_GET_NEWLY_PLUGGED_SENSOR       0
 

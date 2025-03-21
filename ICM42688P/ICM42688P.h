@@ -4,8 +4,14 @@
 #include "stm32h7xx_hal.h"
 
 #define SPI3_TIMEOUT 100
-#define IMU_SPI_NSS_H()    __NOP()//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET)
-#define IMU_SPI_NSS_L()    __NOP()//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET)
+#define SPI3_USE_SOFT_NSS   1
+#if SPI3_USE_SOFT_NSS
+#define IMU_SPI_NSS_H()    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET)
+#define IMU_SPI_NSS_L()    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET)
+#else //HARDWARE_NSS cannot use
+#define IMU_SPI_NSS_H()    __NOP()
+#define IMU_SPI_NSS_L()    __NOP()
+#endif
 
 typedef struct{
   float       accelData[3];

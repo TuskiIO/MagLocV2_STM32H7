@@ -64,7 +64,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         //刷新缓存，避免优化导致rx_buf不更新
         SCB_InvalidateDCache_by_Addr((uint32_t *)rx_buf, RX_BUF_SIZE);
         // HAL_UART_Transmit(&hlpuart1, rx_buf, Size, 100);  
-        CDC_Transmit_HS(rx_buf, Size);
+        // CDC_Transmit_HS(rx_buf, Size);
         HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
         __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);		   // 手动关闭DMA_IT_HT中断
         #if RS485_RX_USE_RTOS_SEMAPHORE

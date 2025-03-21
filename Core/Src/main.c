@@ -86,7 +86,8 @@ const osThreadAttr_t modbusTask_attributes = {
   .priority = (osPriority_t) osPriorityHigh,
 };
 /* USER CODE BEGIN PV */
-uint8_t key3_pressed;
+uint8_t key3_pressed = 0;
+uint8_t key2_pressed = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -167,12 +168,9 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-
-  ICM42688_Init();
   HAL_Delay(500);
   HAL_ADCEx_Calibration_Start(&hadc3,ADC_CALIB_OFFSET,ADC_SINGLE_ENDED);
   HAL_Delay(500);
-
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -199,7 +197,7 @@ int main(void)
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* creation of adcTask */
-  // adcTaskHandle = osThreadNew(StartAdcTask, NULL, &adcTask_attributes);
+  adcTaskHandle = osThreadNew(StartAdcTask, NULL, &adcTask_attributes);
 
   /* creation of modbusTask */
   modbusTaskHandle = osThreadNew(StartModbusTask, NULL, &modbusTask_attributes);
@@ -487,7 +485,11 @@ static void MX_SPI3_Init(void)
   hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
+  #if SPI3_USE_SOFT_NSS
+  hspi3.Init.NSS = SPI_NSS_SOFT;
+  #else
   hspi3.Init.NSS = SPI_NSS_HARD_OUTPUT;
+  #endif
   hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
@@ -508,7 +510,14 @@ static void MX_SPI3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SPI3_Init 2 */
-
+  #if SPI3_USE_SOFT_NSS
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitStruct.Pin = GPIO_PIN_15;		
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  #endif
   /* USER CODE END SPI3_Init 2 */
 
 }
@@ -623,7 +632,6 @@ static void MX_TIM4_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM4_Init 1 */
 
@@ -643,21 +651,9 @@ static void MX_TIM4_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -665,7 +661,6 @@ static void MX_TIM4_Init(void)
   __HAL_TIM_SET_COUNTER(&htim4, 0);		// clear timer conter
   __HAL_TIM_ENABLE(&htim4);				// enable timer
   /* USER CODE END TIM4_Init 2 */
-  HAL_TIM_MspPostInit(&htim4);
 
 }
 
@@ -749,8 +744,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SWIO2_Pin SWIO3_Pin */
-  GPIO_InitStruct.Pin = SWIO2_Pin|SWIO3_Pin;
+  /*Configure GPIO pins : SWIO1_Pin SWIO2_Pin SWIO3_Pin */
+  GPIO_InitStruct.Pin = SWIO1_Pin|SWIO2_Pin|SWIO3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
@@ -794,12 +789,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   if(GPIO_Pin == KEY2_Pin){
     if(HAL_GPIO_ReadPin(KEY2_GPIO_Port,KEY2_Pin)==GPIO_PIN_RESET){
       //key2 pressed
+      key2_pressed = 1;
       HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-
-      #if PRESS_KEY_B2_SET_SLAVEID
-      uint8_t temp_key_set_slaveID = PRESS_KEY_B2_SET_SLAVEID_ADDRESS;
-      Modbus_CMD51_WriteBytes(MB_Broadcast_ID,0x00,0x01,&temp_key_set_slaveID);
-      #endif
     }
     else{
       //key2 released
@@ -830,6 +821,7 @@ void StartDefaultTask(void *argument)
 {
   /* init code for LWIP */
   MX_LWIP_Init();
+
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
@@ -875,17 +867,28 @@ void StartAdcTask(void *argument)
   // float cpu_temp = 0;
   // TS_CAL1 = *(__IO uint16_t *)(0x1FF1E820);
 	// TS_CAL2 = *(__IO uint16_t *)(0x1FF1E840);
-  // for(;;)
-  // {
-  //   HAL_ADC_Start(&hadc3);	//启动ADC转换
-	//   HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
-	//   adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
-  //   cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
-  //   #if USE_USB_PRINTF
-  //   //usb_printf("cpu_temp: %lf\n", cpu_temp);
-  //   #endif
-  //   osDelay(500);
-  // }
+
+  ICM42688_Init();
+  for(;;){
+    // HAL_ADC_Start(&hadc3);	//启动ADC转换
+	  // HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
+	  // adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
+    // cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
+    // #if USE_USB_PRINTF
+    // usb_printf("cpu_temp: %lf\n", cpu_temp);
+    // #else
+    // UNUSED(cpu_temp);
+    // #endif
+    ICM42688_GetGyro();
+    ICM42688_GetAccel();
+    ICM42688_GetTemper();
+    #if USE_USB_PRINTF
+    usb_printf("accelData: %.1f, %.1f, %.1f\n", ICM42688_Data.accelData[0],ICM42688_Data.accelData[1],ICM42688_Data.accelData[2]);
+    usb_printf("gyroData: %.1f, %.1f, %.1f\n", ICM42688_Data.gyroData[0],ICM42688_Data.gyroData[1],ICM42688_Data.gyroData[2]);
+    usb_printf("tempData: %.1f\n", ICM42688_Data.tempData);
+    #endif
+    osDelay(500);
+  }
   /* USER CODE END StartAdcTask */
 }
 
@@ -931,10 +934,10 @@ void StartModbusTask(void *argument)
     Get_MagSensor_Config(&mag_sensor[i]);
     osDelay(1);
   }
-  Update_TimeStamp();
-
+  
   for (;;){
     #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
+    Update_TimeStamp();
     Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
     #if !(USE_MAG_SENSOR_DRDY)
     // TickType_t xStartTime = xTaskGetTickCount();
@@ -961,13 +964,17 @@ void StartModbusTask(void *argument)
         Get_MagSensor_Config(&mag_sensor[i]);
       }
     };
-    #endif
-
     #if USE_USB_PRINTF
     usb_printf("Plugged sensor number: %d\n", sensor_num);
     #endif
+    #endif
 
     #if PRESS_KEY_B2_SET_SLAVEID
+    if(key2_pressed){
+      uint8_t temp_key_set_slaveID = PRESS_KEY_B2_SET_SLAVEID_ADDRESS;
+      Modbus_CMD51_WriteBytes(MB_Broadcast_ID,0x00,0x01,&temp_key_set_slaveID);
+      key2_pressed = 0;
+    }
     if(key3_pressed){
       Modbus_CMD60_TriggerMeasurement(PRESS_KEY_B2_SET_SLAVEID_ADDRESS);
       key3_pressed = 0;
@@ -986,7 +993,7 @@ void StartModbusTask(void *argument)
 
 void MPU_Config(void)
 {
-   MPU_Region_InitTypeDef MPU_InitStruct = {0};
+  MPU_Region_InitTypeDef MPU_InitStruct = {0};
 
   /* Disables the MPU */
   HAL_MPU_Disable();
