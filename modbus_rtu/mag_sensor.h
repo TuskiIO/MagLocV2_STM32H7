@@ -3,7 +3,7 @@
 
 #include "stm32h7xx_hal.h"
 
-#define GET_MAGSENSOR_DATA                  0
+#define GET_MAGSENSOR_DATA                  1
 #define INITIAL_GET_NEWLY_PLUGGED_SENSOR    1
 #define AUTO_GET_NEWLY_PLUGGED_SENSOR       0
 
@@ -106,6 +106,8 @@ extern MAG_SENSOR_module_t mag_sensor[];
 extern uint8_t slaveID_tba;
 extern uint32_t slaveID_map[];
 extern uint8_t PC_Trans_Buff[583];
+extern uint32_t sensor_pkg_cnt;
+extern uint32_t sensor_err_pkg_cnt;
 
 /**
  * @brief  将所有默认地址的传感器分配slaveID，并修改全局变量sensor_num，将slaveID保存在MAG_SENSOR_Config_t中，初次检测会等待更长时间

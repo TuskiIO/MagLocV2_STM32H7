@@ -9,6 +9,8 @@ volatile uint32_t TIM2_time_s;
 uint8_t sensor_num = 0;
 uint8_t slaveID_tba;       //slaveID to be allocated
 uint32_t slaveID_map[8] = {0};     //bit map of used slaveID
+uint32_t sensor_pkg_cnt;
+uint32_t sensor_err_pkg_cnt;
 
 static void Init_SlaveID_Map(void) {
     memset((void*)slaveID_map, 0, sizeof(slaveID_map));
@@ -137,11 +139,12 @@ HAL_StatusTypeDef Get_MagSensors_Data(void){
         HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET);
         #else                       // get all data
         HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET);
-        #endif
+        #endif 
         if(state != HAL_OK){
-            //Handle error
+            sensor_err_pkg_cnt++;
             continue;
         }
+        sensor_pkg_cnt++;
         delay_us(10);
     }
     return HAL_OK;
@@ -193,9 +196,10 @@ float Update_TimeStamp(void) {
 uint8_t PC_Trans_Buff[583] = {0};
 uint16_t PC_TRANS_Assemble(void)
 {
-    // volatile uint32_t temp;
-    // uint16_t mag_idx = 0;
-    // uint16_t ptr = 0;
+    volatile uint32_t temp;
+    uint16_t mag_idx = 0;
+    uint16_t ptr = 0;
+
     // PC_Trans_Buff[ptr++] = 0x55;
     // PC_Trans_Buff[ptr++] = 0xaa;
     // PC_Trans_Buff[ptr++] = 0xff;
@@ -219,10 +223,7 @@ uint16_t PC_TRANS_Assemble(void)
     // }
     // return ptr;
 
-    // old data format
-    volatile uint32_t temp;
-    uint16_t mag_idx = 0;
-    uint16_t ptr = 0;
+    /*** old data format ***/
     PC_Trans_Buff[ptr++] = 0x55;
     PC_Trans_Buff[ptr++] = 0xaa;
     PC_Trans_Buff[ptr++] = 0xff;

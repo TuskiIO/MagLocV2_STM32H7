@@ -88,6 +88,7 @@ const osThreadAttr_t modbusTask_attributes = {
 /* USER CODE BEGIN PV */
 uint8_t key3_pressed = 0;
 uint8_t key2_pressed = 0;
+struct udp_pcb* pcb;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -765,11 +766,11 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-static uint8_t recv_buf[1024] = {0};
+// static uint8_t recv_buf[1024] = {0};
 void example_recv_udp(void *arg, void* data, u32_t recv_len)
 {
   if(data != NULL){
-    usb_printf("udp_recv: %s\n", (const char*)data);
+    // usb_printf("udp_recv: %s\n", (const char*)data);
   }
 }
 
@@ -826,25 +827,8 @@ void StartDefaultTask(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   UNUSED(argument);
-  ptpd_init();
-  osDelay(1000);
-  /* Infinite loop */
-  // int led_cnt = 0;
-  // struct udp_pcb* pcb = create_udp_send(5001);
-  // ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
-  // pcb = create_udp_recv(pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
-  // const char* message = "Hello UDP message!\n\r";
   for(;;) 
   {
-    // led_cnt++;
-    // if(led_cnt > 500){
-    //   HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-    //   led_cnt = 0;
-    //   do_udp_send(pcb, remote_ip, 5002, (void*)message, strlen(message));
-    // }
-    // ptpd_task();
-    // updatePTPTimers();
-    // osDelay(1);
     osDelay(1000);
   }
 
@@ -862,32 +846,35 @@ void StartAdcTask(void *argument)
 {
   /* USER CODE BEGIN StartAdcTask */
   UNUSED(argument);
-  // uint16_t TS_CAL1, TS_CAL2;
-  // uint32_t adc_value;
-  // float cpu_temp = 0;
-  // TS_CAL1 = *(__IO uint16_t *)(0x1FF1E820);
-	// TS_CAL2 = *(__IO uint16_t *)(0x1FF1E840);
+
+  uint16_t TS_CAL1, TS_CAL2;
+  uint32_t adc_value;
+  float cpu_temp = 0;
+  TS_CAL1 = *(__IO uint16_t *)(0x1FF1E820);
+	TS_CAL2 = *(__IO uint16_t *)(0x1FF1E840);
 
   ICM42688_Init();
+
   for(;;){
-    // HAL_ADC_Start(&hadc3);	//启动ADC转换
-	  // HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
-	  // adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
-    // cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
-    // #if USE_USB_PRINTF
-    // usb_printf("cpu_temp: %lf\n", cpu_temp);
-    // #else
-    // UNUSED(cpu_temp);
-    // #endif
+    HAL_ADC_Start(&hadc3);	//启动ADC转换
+	  HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
+	  adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
+    cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
+    #if USE_USB_PRINTF
+    usb_printf("cpu_temp: %lf\n", cpu_temp);
+    #else
+    UNUSED(cpu_temp);
+    #endif
+
     ICM42688_GetGyro();
     ICM42688_GetAccel();
     ICM42688_GetTemper();
     #if USE_USB_PRINTF
-    usb_printf("accelData: %.1f, %.1f, %.1f\n", ICM42688_Data.accelData[0],ICM42688_Data.accelData[1],ICM42688_Data.accelData[2]);
-    usb_printf("gyroData: %.1f, %.1f, %.1f\n", ICM42688_Data.gyroData[0],ICM42688_Data.gyroData[1],ICM42688_Data.gyroData[2]);
+    usb_printf("accelData: %.1f, %.1f, %.1f", ICM42688_Data.accelData[0],ICM42688_Data.accelData[1],ICM42688_Data.accelData[2]);
+    usb_printf("gyroData: %.1f, %.1f, %.1f", ICM42688_Data.gyroData[0],ICM42688_Data.gyroData[1],ICM42688_Data.gyroData[2]);
     usb_printf("tempData: %.1f\n", ICM42688_Data.tempData);
     #endif
-    osDelay(500);
+    osDelay(200);
   }
   /* USER CODE END StartAdcTask */
 }
@@ -912,6 +899,14 @@ void StartModbusTask(void *argument)
   #endif
   uint16_t led_cnt = 0;
 
+  osDelay(500);
+  ptpd_init();
+  udp_conn_init();
+
+  ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
+  // pcb = create_udp_recv(pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
+  pcb = create_udp_send(6001);
+
   //清空rx_buf,开启DMA空闲中断接收
   // SCB_CleanDcache_by_Addr((uint32_t*)rx_buf, RX_BUF_SIZE);
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
@@ -919,6 +914,8 @@ void StartModbusTask(void *argument)
 
   timestamp = 0;
   TIM2_time_s = 0;
+  sensor_pkg_cnt = 0;
+  sensor_err_pkg_cnt  = 0;
 
   //检查已有的SlaveID，配置slaveID_map[8]
   state = Check_MagSensors_SlaveID();
@@ -934,7 +931,7 @@ void StartModbusTask(void *argument)
     Get_MagSensor_Config(&mag_sensor[i]);
     osDelay(1);
   }
-  
+
   for (;;){
     #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
     Update_TimeStamp();
@@ -947,8 +944,10 @@ void StartModbusTask(void *argument)
     #endif
     Get_MagSensors_Data();
     //send to PC
+    // usb_printf("Time Stamp: %.1f, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
     PC_buf_size = PC_TRANS_Assemble();
-    CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
+    // CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
+    do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, PC_buf_size);
     #endif
 
     led_cnt++;
