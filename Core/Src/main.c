@@ -780,7 +780,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   if(GPIO_Pin == KEY1_Pin){
     if(HAL_GPIO_ReadPin(KEY1_GPIO_Port,KEY1_Pin)==GPIO_PIN_RESET){
       //key1 pressed
-      usb_printf("Time Stamp: %.1f, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
+      usb_printf("Time Stamp: %.1f, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\r\n", timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
       HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
     }
     else{
@@ -861,10 +861,12 @@ void StartAdcTask(void *argument)
 	  HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
 	  adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
     cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
-    #if USE_USB_PRINTF
-    usb_printf("cpu_temp: %lf\n", cpu_temp);
-    #else
+    #if PRESS_KEY_B2_SET_SLAVEID
     UNUSED(cpu_temp);
+    #else
+    if(key2_pressed){
+      usb_printf("cpu_temp: %lf\n", cpu_temp);
+    }
     #endif
 
     ICM42688_GetGyro();

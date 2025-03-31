@@ -105,7 +105,7 @@ extern uint8_t sensor_num;
 extern MAG_SENSOR_module_t mag_sensor[];
 extern uint8_t slaveID_tba;
 extern uint32_t slaveID_map[];
-extern uint8_t PC_Trans_Buff[583];
+extern uint8_t PC_Trans_Buff[1024];
 extern uint32_t sensor_pkg_cnt;
 extern uint32_t sensor_err_pkg_cnt;
 
