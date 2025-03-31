@@ -193,52 +193,59 @@ float Update_TimeStamp(void) {
 }
 
 
-uint8_t PC_Trans_Buff[583] = {0};
+uint8_t PC_Trans_Buff[1024] = {0};
 uint16_t PC_TRANS_Assemble(void)
 {
     volatile uint32_t temp;
     uint16_t mag_idx = 0;
     uint16_t ptr = 0;
 
-    // PC_Trans_Buff[ptr++] = 0x55;
-    // PC_Trans_Buff[ptr++] = 0xaa;
-    // PC_Trans_Buff[ptr++] = 0xff;
-    // PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
-
-    // memcpy((uint8_t *)&temp, (uint8_t *)&timestamp, 4);
-    // PC_Trans_Buff[ptr++] = (temp) & 0xff;
-    // PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
-    // PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
-    // PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
-
-    // for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
-    //     for(uint8_t i = 0; i<3; i++){
-    //         //assemble float magVal[3]
-    //         memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
-    //         PC_Trans_Buff[ptr++] = (temp) & 0xff;
-    //         PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
-    //         PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
-    //         PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
-    //     }
-    // }
-    // return ptr;
-
-    /*** old data format ***/
     PC_Trans_Buff[ptr++] = 0x55;
     PC_Trans_Buff[ptr++] = 0xaa;
     PC_Trans_Buff[ptr++] = 0xff;
     PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
-    PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
+
+    memcpy((uint8_t *)&temp, (uint8_t *)&timestamp, 4);
+    PC_Trans_Buff[ptr++] = (temp) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+
+    float temp_sensor_error_pkg_percentage = ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt);
+    memcpy((uint8_t *)&temp, (uint8_t *)&temp_sensor_error_pkg_percentage, 4);
+    PC_Trans_Buff[ptr++] = (temp) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
 
     for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
         for(uint8_t i = 0; i<3; i++){
             //assemble float magVal[3]
             memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
-            PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
             PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
-            PC_Trans_Buff[ptr++] = (temp >>  8) & 0xff;
-            PC_Trans_Buff[ptr++] = (temp      ) & 0xff;
+            PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
         }
     }
     return ptr;
+
+    // /*** old data format ***/
+    // PC_Trans_Buff[ptr++] = 0x55;
+    // PC_Trans_Buff[ptr++] = 0xaa;
+    // PC_Trans_Buff[ptr++] = 0xff;
+    // PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
+    // PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
+
+    // for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
+    //     for(uint8_t i = 0; i<3; i++){
+    //         //assemble float magVal[3]
+    //         memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
+    //         PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp >>  8) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp      ) & 0xff;
+    //     }
+    // }
+    // return ptr;
 }
