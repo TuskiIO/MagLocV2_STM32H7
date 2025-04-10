@@ -167,7 +167,6 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
             //记录slaveID
             mag_sensor[sensor_num].cfg.mag_sensor_cfg.mb_slave_id = temp_slaveID;
             sensor_num++;
-            delay_us(100);
             #if USE_USB_PRINTF
             usb_printf("Sensor index: %d; SlaveID: %x\n", sensor_num, temp_slaveID);
             #endif
@@ -181,6 +180,7 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
             usb_printf("SlaveID Conflict: %x\n", temp_slaveID);
             #endif
         }
+        delay_us(10);
     }
 
     if(sensor_num == 0)
