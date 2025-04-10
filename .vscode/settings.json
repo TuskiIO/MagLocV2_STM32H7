@@ -12,7 +12,8 @@
         "ethernet.h": "c",
         "udp_send.h": "c",
         "mag_sensor.h": "c",
-        "stm32h7xx_hal_crc.h": "c"
+        "stm32h7xx_hal_crc.h": "c",
+        "stm32h7xx_hal.h": "c"
     },
     "cortex-debug.variableUseNaturalFormat": false
 }

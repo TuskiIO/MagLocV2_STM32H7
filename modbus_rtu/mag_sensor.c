@@ -12,7 +12,7 @@ uint32_t slaveID_map[8] = {0};     //bit map of used slaveID
 uint32_t sensor_pkg_cnt;
 uint32_t sensor_err_pkg_cnt;
 
-static void Init_SlaveID_Map(void) {
+void Init_SlaveID_Map(void) {
     memset((void*)slaveID_map, 0, sizeof(slaveID_map));
     //保留MB_Broadcast_ID与MB_MAX_ID~0xFF的ID
     SET_SLAVEID_MAP(MB_Broadcast_ID);
@@ -20,7 +20,7 @@ static void Init_SlaveID_Map(void) {
     slaveID_tba = 0x01;
 }
 
-static uint8_t Find_Free_SlaveID(void) {
+uint8_t Find_Free_SlaveID(void) {
     for(uint8_t i=0; i<8; i++){
         if(slaveID_map[i] != 0xFFFFFFFF){
             for(uint8_t b=0; b<32; b++){
@@ -81,6 +81,7 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
 
             //处理slaveID_map
             SET_SLAVEID_MAP(slaveID_tba);
+            osDelay(10);
         }
     }
     else{

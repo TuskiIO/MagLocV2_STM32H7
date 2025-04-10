@@ -6,6 +6,7 @@
 #define GET_MAGSENSOR_DATA                  1
 #define INITIAL_GET_NEWLY_PLUGGED_SENSOR    1
 #define AUTO_GET_NEWLY_PLUGGED_SENSOR       0
+#define RESET_ALL_SLAVE_ID_WHEN_RESET       0
 
 #define PRESS_KEY_B2_SET_SLAVEID  0
 #define PRESS_KEY_B2_SET_SLAVEID_ADDRESS 0x02
@@ -158,5 +159,8 @@ uint16_t PC_TRANS_Assemble(void);
  * @retval 当前时间值(s)
  */
  float Update_TimeStamp(void);
+
+ void Init_SlaveID_Map(void);
+ uint8_t Find_Free_SlaveID(void);
 
 #endif

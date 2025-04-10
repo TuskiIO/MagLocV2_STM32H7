@@ -86,8 +86,9 @@ const osThreadAttr_t modbusTask_attributes = {
   .priority = (osPriority_t) osPriorityHigh,
 };
 /* USER CODE BEGIN PV */
-uint8_t key3_pressed = 0;
+uint8_t key1_pressed = 0;
 uint8_t key2_pressed = 0;
+uint8_t key3_pressed = 0;
 struct udp_pcb* pcb;
 /* USER CODE END PV */
 
@@ -780,7 +781,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   if(GPIO_Pin == KEY1_Pin){
     if(HAL_GPIO_ReadPin(KEY1_GPIO_Port,KEY1_Pin)==GPIO_PIN_RESET){
       //key1 pressed
-      usb_printf("Time Stamp: %.1f, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\r\n", timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
+      key1_pressed = 1;
       HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
     }
     else{
@@ -831,6 +832,15 @@ void StartDefaultTask(void *argument)
   for(;;) 
   {
     osDelay(1000);
+    if(key1_pressed){
+      usb_printf("Sensor_num: %d\r\n", sensor_num);
+      for(uint8_t i=0; i<sensor_num; i++){
+        usb_printf("sensor[%d]: 0x%X, ", i, mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id);
+      }
+      usb_printf("\r\n");
+      usb_printf("Time Stamp: %.1f, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\r\n", timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
+      key1_pressed = 0;
+    }
   }
 
   /* USER CODE END 5 */
@@ -866,6 +876,7 @@ void StartAdcTask(void *argument)
     #else
     if(key2_pressed){
       usb_printf("cpu_temp: %lf\n", cpu_temp);
+      key2_pressed = 0;
     }
     #endif
 
@@ -920,8 +931,16 @@ void StartModbusTask(void *argument)
   sensor_pkg_cnt = 0;
   sensor_err_pkg_cnt  = 0;
 
+  #if RESET_ALL_SLAVE_ID_WHEN_RESET
+  uint8_t temp_slaveID = MB_Temp_ID;
+  Modbus_CMD51_WriteBytes(MB_Broadcast_ID, 0x00, 0x01, &temp_slaveID);
+  Init_SlaveID_Map();
+  osDelay(1000);
+  #else
   //检查已有的SlaveID，配置slaveID_map[8]
   state = Check_MagSensors_SlaveID();
+  #endif
+
   #if INITIAL_GET_NEWLY_PLUGGED_SENSOR
   state=Get_MagSensors_Plugged();
   while(state == HAL_OK){
