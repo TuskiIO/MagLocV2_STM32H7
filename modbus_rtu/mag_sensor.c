@@ -4,7 +4,7 @@
 #include "cmsis_os.h"
 
 MAG_SENSOR_module_t mag_sensor[MAX_SENSOR_NUM];
-volatile float timestamp;
+volatile double mcu_timestamp;
 volatile uint32_t TIM2_time_s;
 uint8_t sensor_num = 0;
 uint8_t slaveID_tba;       //slaveID to be allocated
@@ -67,7 +67,7 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
             }
             free(sensor_UID[i]);
             sensor_UID[i] = NULL;
-            //分配失败
+            //分配失败.
             if(retry_times == 0){
                 error_mark++;
                 continue;
@@ -188,9 +188,9 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
     return HAL_OK;
 }
 
-float Update_TimeStamp(void) {
-    timestamp = (float)TIM2_time_s + (float)(TIM2->CNT)/1000000.0f;
-    return timestamp;
+double Update_TimeStamp(void) {
+    mcu_timestamp = (double)TIM2_time_s + (double)(TIM2->CNT)/1000000.0f;
+    return mcu_timestamp;
 }
 
 
@@ -201,34 +201,63 @@ uint16_t PC_TRANS_Assemble(void)
     uint16_t mag_idx = 0;
     uint16_t ptr = 0;
 
+    // PC_Trans_Buff[ptr++] = 0x55;
+    // PC_Trans_Buff[ptr++] = 0xaa;
+    // PC_Trans_Buff[ptr++] = 0xff;
+    // PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
+
+    // memcpy((uint8_t *)&temp, (uint8_t *)&timestamp, 4);
+    // PC_Trans_Buff[ptr++] = (temp) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+
+    // float temp_sensor_error_pkg_percentage = ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt);
+    // memcpy((uint8_t *)&temp, (uint8_t *)&temp_sensor_error_pkg_percentage, 4);
+    // PC_Trans_Buff[ptr++] = (temp) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    // PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+
+    // for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
+    //     for(uint8_t i = 0; i<3; i++){
+    //         //assemble float magVal[3]
+    //         memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
+    //         PC_Trans_Buff[ptr++] = (temp) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+    //     }
+    // }
+    // return ptr;
+
+    // frame header
     PC_Trans_Buff[ptr++] = 0x55;
     PC_Trans_Buff[ptr++] = 0xaa;
     PC_Trans_Buff[ptr++] = 0xff;
-    PC_Trans_Buff[ptr++] = (sensor_num) & 0xff;
-
-    memcpy((uint8_t *)&temp, (uint8_t *)&timestamp, 4);
-    PC_Trans_Buff[ptr++] = (temp) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
-
-    float temp_sensor_error_pkg_percentage = ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt);
-    memcpy((uint8_t *)&temp, (uint8_t *)&temp_sensor_error_pkg_percentage, 4);
-    PC_Trans_Buff[ptr++] = (temp) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
-    PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+    // mag sensor num
+    PC_Trans_Buff[ptr++] = sensor_num;
+    // mag sensor timestamp
+    // double mcu_timestamp = 123.456;
+    memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&mcu_timestamp, 8);
+    ptr += 8;
 
     for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
+        PC_Trans_Buff[ptr++] = mag_sensor[mag_idx].cfg.mag_sensor_cfg.mb_slave_id;
         for(uint8_t i = 0; i<3; i++){
             //assemble float magVal[3]
-            memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
-            PC_Trans_Buff[ptr++] = (temp) & 0xff;
-            PC_Trans_Buff[ptr++] = (temp >> 8) & 0xff;
-            PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
-            PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+            memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
+            ptr += 4;
+            // memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
+            // PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
+            // PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
+            // PC_Trans_Buff[ptr++] = (temp >>  8) & 0xff;
+            // PC_Trans_Buff[ptr++] = (temp      ) & 0xff;
         }
     }
+    uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, ptr);
+    PC_Trans_Buff[ptr++] = (crc16      ) & 0xff;
+    PC_Trans_Buff[ptr++] = (crc16 >>  8) & 0xff;
     return ptr;
 
     // /*** old data format ***/

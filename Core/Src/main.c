@@ -828,17 +828,19 @@ void StartDefaultTask(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
+  HAL_GPIO_WritePin(OLED_BLK_GPIO_Port, OLED_BLK_Pin, RESET);
   UNUSED(argument);
   for(;;) 
   {
-    osDelay(1000);
+    osDelay(5);
+    HAL_GPIO_TogglePin(OLED_BLK_GPIO_Port, OLED_BLK_Pin);
     if(key1_pressed){
       usb_printf("Sensor_num: %d\r\n", sensor_num);
       for(uint8_t i=0; i<sensor_num; i++){
         usb_printf("sensor[%d]: 0x%X, ", i, mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id);
       }
       usb_printf("\r\n");
-      usb_printf("Time Stamp: %.1f, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\r\n", timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
+      usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\r\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
       key1_pressed = 0;
     }
   }
@@ -865,7 +867,6 @@ void StartAdcTask(void *argument)
 	TS_CAL2 = *(__IO uint16_t *)(0x1FF1E840);
 
   ICM42688_Init();
-
   for(;;){
     HAL_ADC_Start(&hadc3);	//启动ADC转换
 	  HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
@@ -926,7 +927,7 @@ void StartModbusTask(void *argument)
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
   __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);
 
-  timestamp = 0;
+  mcu_timestamp = 0;
   TIM2_time_s = 0;
   sensor_pkg_cnt = 0;
   sensor_err_pkg_cnt  = 0;
@@ -966,7 +967,7 @@ void StartModbusTask(void *argument)
     #endif
     Get_MagSensors_Data();
     //send to PC
-    // usb_printf("Time Stamp: %.1f, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
+    // usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
     PC_buf_size = PC_TRANS_Assemble();
     // CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
     do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, PC_buf_size);
@@ -1014,6 +1015,7 @@ void StartModbusTask(void *argument)
 
 void MPU_Config(void)
 {
+
   MPU_Region_InitTypeDef MPU_InitStruct = {0};
 
   /* Disables the MPU */

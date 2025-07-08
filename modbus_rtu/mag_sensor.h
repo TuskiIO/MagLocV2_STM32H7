@@ -100,7 +100,7 @@ typedef struct{
 
 #pragma pack() //align memory allocation with default strategy
 
-extern volatile float timestamp;
+extern volatile double mcu_timestamp;
 extern volatile uint32_t TIM2_time_s;
 extern uint8_t sensor_num;
 extern MAG_SENSOR_module_t mag_sensor[];
@@ -158,7 +158,7 @@ uint16_t PC_TRANS_Assemble(void);
  * @brief  更新timestamp    
  * @retval 当前时间值(s)
  */
- float Update_TimeStamp(void);
+ double Update_TimeStamp(void);
 
  void Init_SlaveID_Map(void);
  uint8_t Find_Free_SlaveID(void);
