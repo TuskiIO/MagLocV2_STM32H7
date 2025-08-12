@@ -767,11 +767,43 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-// static uint8_t recv_buf[1024] = {0};
+static uint8_t udp_recv_buf[1024] = {0};
+static uint8_t udp_to_485_buf[1024] = {0};
+static uint8_t udp_set_sensor_cfg_flag = 0;
+static uint8_t udp_get_sensor_cfg_flag = 0;
+// static uint8_t udp_to_485_len = 0;
+
+/**
+ *udp cmd list:
+ * CMD 0x00: set sensor config, set all if mb_id == 0x00
+ * | 0x55 | 0xBB | 0x00 | [FULL_CFG_t] | 
+ * CMD 0X01: read sensor config
+ * | 0x55 | 0xBB | 0x01 | modbus_slave_ID |
+ */
 void example_recv_udp(void *arg, void* data, u32_t recv_len)
 {
+  UNUSED(arg);
   if(data != NULL){
     // usb_printf("udp_recv: %s\n", (const char*)data);
+
+    uint16_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)udp_recv_buf, recv_len);
+    if (crc)
+      return;
+
+    if(udp_recv_buf[0] == 0x55 && udp_recv_buf[1] == 0xBB){
+      #if GET_SET_CONFIG_OF_SENSORS
+      if(udp_recv_buf[2] == 0x00){
+        //set config
+        memcpy(udp_to_485_buf, &udp_recv_buf[3], sizeof(FULL_CFG_t));
+        udp_set_sensor_cfg_flag = 1;
+      }
+      if(udp_recv_buf[2] == 0x01){
+        //get config
+        udp_to_485_buf[0] = udp_recv_buf[3];
+        udp_get_sensor_cfg_flag = 1;
+      }
+      #endif
+    }
   }
 }
 
@@ -828,7 +860,7 @@ void StartDefaultTask(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
-  HAL_GPIO_WritePin(OLED_BLK_GPIO_Port, OLED_BLK_Pin, RESET);
+  HAL_GPIO_WritePin(OLED_BLK_GPIO_Port, OLED_BLK_Pin, GPIO_PIN_RESET);
   UNUSED(argument);
   for(;;) 
   {
@@ -919,7 +951,7 @@ void StartModbusTask(void *argument)
   udp_conn_init();
 
   ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
-  // pcb = create_udp_recv(pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
+  pcb = create_udp_recv(pcb, netif_default->ip_addr, 5001, udp_recv_buf, 1024, example_recv_udp, NULL);
   pcb = create_udp_send(6001);
 
   //清空rx_buf,开启DMA空闲中断接收
@@ -956,6 +988,34 @@ void StartModbusTask(void *argument)
   }
 
   for (;;){
+    #if GET_SET_CONFIG_OF_SENSORS
+    if(udp_set_sensor_cfg_flag == 1){
+      //send config to sensors
+      Set_MagSensor_Config(udp_to_485_buf[0],(FULL_CFG_t*)udp_to_485_buf);
+      udp_set_sensor_cfg_flag = 0;
+    }
+    if(udp_get_sensor_cfg_flag == 1){
+      uint8_t temp_sensor_NO = 0;
+      //send config to sensors
+      for(uint8_t i=0; i<sensor_num; i++){
+        if(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id == udp_to_485_buf[0]){
+          temp_sensor_NO = i;
+          break;
+        }
+      }
+      Get_MagSensor_Config(&mag_sensor[temp_sensor_NO]);
+      PC_Trans_Buff[0] = 0x55;
+      PC_Trans_Buff[1] = 0xaa;
+      PC_Trans_Buff[2] = 0xff;
+      memcpy(&PC_Trans_Buff[3], (uint8_t *)&mag_sensor[temp_sensor_NO].cfg, sizeof(FULL_CFG_t));
+      uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, sizeof(FULL_CFG_t)+3);
+      PC_Trans_Buff[sizeof(FULL_CFG_t)+3] = (crc16      ) & 0xff;
+      PC_Trans_Buff[sizeof(FULL_CFG_t)+4] = (crc16 >>  8) & 0xff;
+      do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, sizeof(FULL_CFG_t)+5);
+      udp_get_sensor_cfg_flag = 0;
+    }
+    #endif
+
     #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
     Update_TimeStamp();
     Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);

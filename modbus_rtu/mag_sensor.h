@@ -4,6 +4,7 @@
 #include "stm32h7xx_hal.h"
 
 #define GET_MAGSENSOR_DATA                  1
+#define GET_SET_CONFIG_OF_SENSORS           1   //UDP接收SENSOR的config struct,并广播发送
 #define INITIAL_GET_NEWLY_PLUGGED_SENSOR    1
 #define AUTO_GET_NEWLY_PLUGGED_SENSOR       0
 #define RESET_ALL_SLAVE_ID_WHEN_RESET       0
@@ -128,11 +129,12 @@ HAL_StatusTypeDef Get_MagSensor_Config(MAG_SENSOR_module_t *sensor);
 
  /**
  * @brief  写单个传感器配置FULL_CFG_t
- * @param  sensor: 传感器结构体指针
+ * @param  slaveID: 传感器mb_slaveID
+ * @param  FULL_CFG_t: 待修改的内容，包含mb_slaveID
  * @retval HAL_OK
  * @retval HAL_ERROR
  */
-HAL_StatusTypeDef Set_MagSensors_Config(MAG_SENSOR_module_t *sensor);
+HAL_StatusTypeDef Set_MagSensor_Config(uint8_t slaveID, FULL_CFG_t *new_full_cfg);
  
 /**
  * @brief  TriggerMeasure后将所有传感器数据更新到MAG_SENSOR_module_t中

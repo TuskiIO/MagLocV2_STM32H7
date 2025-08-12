@@ -112,8 +112,17 @@ HAL_StatusTypeDef Get_MagSensor_Config(MAG_SENSOR_module_t *sensor){
 }
 
 
-HAL_StatusTypeDef Set_MagSensor_Config(MAG_SENSOR_module_t *sensor){
-    if(Modbus_CMD51_WriteBytes(sensor->cfg.mag_sensor_cfg.mb_slave_id, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_CONFIG_LENGTH,(uint8_t*)&sensor->cfg) != HAL_OK){
+HAL_StatusTypeDef Set_MagSensor_Config(uint8_t slaveID, FULL_CFG_t *new_full_cfg){
+    HAL_StatusTypeDef state;
+    if(slaveID == MB_Broadcast_ID){
+        return HAL_ERROR;
+        //state = Modbus_CMD51_WriteBytes(MB_Broadcast_ID, MAG_SENSOR_CONFIG_OFFSET + 1, MAG_SENSOR_CONFIG_LENGTH - 1, ((uint8_t*)new_full_cfg)+1);
+    }
+    else{
+        state = Modbus_CMD51_WriteBytes(slaveID, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_CONFIG_LENGTH, (uint8_t*)new_full_cfg);
+    }
+    osDelay(500);
+    if(state != HAL_OK){
         //Handle error
         return HAL_ERROR;
     }
@@ -197,7 +206,7 @@ double Update_TimeStamp(void) {
 uint8_t PC_Trans_Buff[1024] = {0};
 uint16_t PC_TRANS_Assemble(void)
 {
-    volatile uint32_t temp;
+    // volatile uint32_t temp;
     uint16_t mag_idx = 0;
     uint16_t ptr = 0;
 
