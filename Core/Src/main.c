@@ -869,7 +869,7 @@ void StartDefaultTask(void *argument)
     if(key1_pressed){
       usb_printf("Sensor_num: %d\r\n", sensor_num);
       for(uint8_t i=0; i<sensor_num; i++){
-        usb_printf("sensor[%d]: 0x%X, ", i, mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id);
+        usb_printf("sensor[%d]: 0x%X, ", i, mag_sensor[i].sensor_cfg.mb_slave_id);
       }
       usb_printf("\r\n");
       usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\r\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
@@ -998,7 +998,7 @@ void StartModbusTask(void *argument)
       uint8_t temp_sensor_NO = 0;
       //send config to sensors
       for(uint8_t i=0; i<sensor_num; i++){
-        if(mag_sensor[i].cfg.mag_sensor_cfg.mb_slave_id == udp_to_485_buf[0]){
+        if(mag_sensor[i].sensor_cfg.mb_slave_id == udp_to_485_buf[0]){
           temp_sensor_NO = i;
           break;
         }
@@ -1007,7 +1007,7 @@ void StartModbusTask(void *argument)
       PC_Trans_Buff[0] = 0x55;
       PC_Trans_Buff[1] = 0xaa;
       PC_Trans_Buff[2] = 0xff;
-      memcpy(&PC_Trans_Buff[3], (uint8_t *)&mag_sensor[temp_sensor_NO].cfg, sizeof(FULL_CFG_t));
+      memcpy(&PC_Trans_Buff[3], (uint8_t *)&mag_sensor[temp_sensor_NO].sensor_cfg, sizeof(FULL_CFG_t));
       uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, sizeof(FULL_CFG_t)+3);
       PC_Trans_Buff[sizeof(FULL_CFG_t)+3] = (crc16      ) & 0xff;
       PC_Trans_Buff[sizeof(FULL_CFG_t)+4] = (crc16 >>  8) & 0xff;

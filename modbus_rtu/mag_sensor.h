@@ -19,9 +19,9 @@
 #define ONLY_GET_SENSOR_MAGVAL      1
 
 #define MAG_SENSOR_CONFIG_OFFSET    0
-#define MAG_SENSOR_CONFIG_LENGTH    70
-#define MAG_SENSOR_DATA_OFFSET      70
-#define MAG_SENSOR_DATA_LENGTH      56  //126-70
+#define MAG_SENSOR_CONFIG_LENGTH    148
+#define MAG_SENSOR_DATA_OFFSET      148
+#define MAG_SENSOR_DATA_LENGTH      107  //255-148
 
 #define MAG_SENSOR_MAGADC_OFFSET    92
 #define MAG_SENSOR_MAGVAL_OFFSET    105
@@ -30,7 +30,38 @@
 #define SET_SLAVEID_MAP(idx)    (slaveID_map[(idx) >> 5] |= (1U << ((idx) & 0x1F)))
 #define RESET_SLAVEID_MAP(idx)  (slaveID_map[(idx) >> 5] &= ~(1U << ((idx) & 0x1F)))
 
+
 #pragma pack(1) //align memory allocation with 1 Byte
+
+//! Sensor Data Structures
+typedef enum{
+    CONTINUOUS=0,
+    ON_TRIG,
+} Measure_Mode_t;
+
+typedef struct {
+    uint8_t             mb_slave_id;
+    uint32_t            mb_baudrate;
+    Measure_Mode_t      measure_mode;       // CONTINUOUS or ON_TRIG
+    uint16_t            update_rate;        // (CONTINUOUS mode) update rate in continous mode
+    uint8_t             latch_mode_enable;  // (ON_TRIG mode) enable latch mode, sensor reading will update upon the next trigger signal 
+    uint8_t             filter_enable;      // enable magVal filtering
+    float               filter_factor;      // output = filter_factor * last_output + (1-filter_factor) * new_data
+    uint8_t             calc_std_enable;    // enable calculate magVal std
+    uint64_t            timestamp_ref;      // in [us]. Write to this value will sync slave time with ref (with communication delays)
+    uint16_t            reserved;
+}  SENSOR_Config_t; // size: 25 Bytes
+
+typedef struct {
+    uint32_t            UID32;              // Unique ID for mcu
+    uint8_t             whoami;             // who-am-i register for the sensor. fixed to 0x31 (49 in decimal)
+    uint8_t             firmware_ver;       // sensor firmware version.
+    uint8_t             sensor_DRDY;        // True, when measurement finishes. False, when data read operation
+    uint64_t            timestamp;          // timestamp in us when RM3100 finishes measurement
+    uint16_t            reserved;
+} SENSOR_Data_t; // size: 17 Bytes
+
+//! RM3100 Magnetometer Data Structures
 
 // magnetometer continuous measurement rate(approximate, to set the TMRC register value at 0x0B)
 // update rate is restricted by cycle counts
@@ -49,20 +80,6 @@ typedef enum{
     RM3100_CMM_RATE_9   = 0x98,
 }CMM_Rate_t;
 
-typedef enum{
-    CONTINUOUS=0,
-    ON_TRIG,
-}Measure_Mode_t;
-
-typedef struct {
-    uint8_t             mb_slave_id;
-    uint32_t            mb_baudrate;
-    uint16_t            update_rate;        // update rate in continous mode
-    Measure_Mode_t      measure_mode;       // continuous or on-trig
-    uint8_t             filter_enable;      // enable magVal filtering
-    float               filter_factor;      // output = filter_factor * last_output + (1-filter_factor) * new_data
-} MAG_SENSOR_Config_t; // size: 13 Bytes
-
 typedef struct {
     CMM_Rate_t          CMM_rate;
     uint16_t            cycle_count;
@@ -75,36 +92,98 @@ typedef struct {
 } EllipMagCal_t; // size: 52 Bytes
 
 typedef struct {
-    MAG_SENSOR_Config_t mag_sensor_cfg;     // reg offset =  0(0x00), len = 13 Bytes
-    RM3100_Config_t     rm3100_cfg;         // reg offset = 13(0x0D), len =  3 Bytes
-    EllipMagCal_t       mag_cal;            // reg offset = 16(0x10), len = 52 Bytes
-    uint16_t            crc16;              // reg offset = 68(0x44), len =  2 Bytes
-}FULL_CFG_t; // size: 70 Bytes
+    RM3100_Config_t     rm3100_cfg;  
+    EllipMagCal_t       mag_cal;     
+}MAG_Config_t; // size: 55 Bytes
 
-// main data struct & Reg offset defines
+typedef struct {
+    int32_t             magADC[3];          // Raw magnetometer readings, in LSB counts
+    float               magVal[3];          // Calibrated magnetic-field intensity, in uT
+    float               magStd[3];          // Standard deviation of the magnetic field intensity, in uT
+    float               magVal_t;           // Calibrated magnetic-field total intensity, in uT
+}MAG_Data_t; // size: 40 Bytes
+
+//! IMU Data Structures
+typedef struct
+{
+    uint8_t accel_mode; // Accelerometer mode: `0`: OFF `1`: STANDBY `2`: LOW_POWER `3`: LOW_NOISE
+    uint8_t gyro_mode;  // Gyroscope mode:     `0`: OFF `1`: STANDBY `2`: LOW_POWER `3`: LOW_NOISE
+
+    uint8_t gyro_fs;  // Gyroscope full scale: ±16000dps, ±8000dps, ±4000dps, ±2000dps
+    uint8_t gyro_odr; // Gyroscope output data rate: 500Hz to 32kHz
+
+    uint8_t accel_fs;  // Accelerometer full scale: ±16g, ±8g, ±4g, ±2g  
+    uint8_t accel_odr; // Accelerometer output data rate: 500Hz to 32kHz
+
+    uint8_t accel_filt_bw; // Accelerometer filter bandwidth: See ICM42688P datasheet for detail 
+    uint8_t gyro_filt_bw; // Gyroscope filter bandwidth: See ICM42688P datasheet for detail
+} ICM42688_Config_t; // size: 8 bytes
+
+typedef struct {
+    ICM42688_Config_t   icm_cfg;            // config for ICM42688P measurement
+    int16_t             accel_offset[3];    // zeros offset of accelerometer (in LSB)
+    int16_t             gyro_offset[3];     // zeros offset of gyroscope (in LSB)
+    float               accel_scale[3];     // accelerometer scale from LSB to m/s^2
+    float               gyro_scale[3];      // gyroscope scale from LSB to dps
+    float               accel_trans_scale;  // accel_trans = (int16_t)(accel_calib * accel_trans_scale)
+    float               gyro_trans_scale;   // gyro_trans = (int16_t)(gyro_calib * gyro_trans_scale)
+} IMU_Config_t; // size: 52 Bytes
+
+typedef struct {
+    int16_t             temp;               // temperature (in 1e-2*degrees) real_temperature = temp * 0.01
+    int16_t             accel_raw[3];       // raw accelerometer counts (in LSB)
+    int16_t             gyro_raw[3];        // raw gyroscope counts (in LSB)
+    float               accel_calib[3];     // calibrated accelerometer reading (in m/s^2) accel_calib = (accel_raw + accel_offset) * accel_scale
+    float               gyro_calib[3];      // calibrated gyroscope reading (in dps) gyro_calib = (gyro_raw + gyro_offset) * gyro_scale
+    int16_t             accel_trans[3];     // accel_trans = (int16_t)(accel_calib * accel_trans_scale), for smaller communication bandwidth
+    int16_t             gyro_trans[3];      // gyro_trans = (int16_t)(gyro_calib * gyro_trans_scale), for smaller communication bandwidth
+} IMU_Data_t; // size: 50 Bytes
+
+//! LED Data Structures
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t brightness;
+} LED_Color_t; // size: 4 Bytes
+
+typedef struct {
+    uint8_t             led_mode;           // 0: disable led, 1: mag_t, 2: acc_t, 3: gyro_t, 4: manual set
+    LED_Color_t         color;              // LED color to be set
+    float               colormap_min;       // min value to normalize color_source to color_level
+    float               colormap_max;       // max value to normalize color_source to color_level
+    uint8_t             color_level;        // color_level of colormap
+} LED_Config_t; // size: 14 Bytes
+
+//! Config Data Structures
+typedef struct {
+    SENSOR_Config_t     sensor_cfg;         // reg offset =   0(0x00), len = 25 Bytes
+    MAG_Config_t        mag_cfg;            // reg offset =  25(0x19), len = 55 Bytes
+    IMU_Config_t        imu_cfg;            // reg offset =  80(0x50), len = 52 Bytes
+    LED_Config_t        led_cfg;            // reg offset = 132(0x84), len = 14 Bytes
+    uint16_t            cfg_crc16;          // reg offset = 146(0x92), len =  2 Bytes
+} FULL_CFG_t; // size: 148 Bytes
+
+//! Full Sensor Data Structure
 typedef struct{
     // read/write registers
-    FULL_CFG_t          cfg;                // reg offset =  0(0x00), len = 70 Bytes
-    uint64_t            timestamp_ref;      // reg offset = 70(0x46), len =  8 Bytes      // write to this value will sync slave time with ref (with communication delays)
+    SENSOR_Config_t     sensor_cfg;         // reg offset =   0(0x00), len = 25 Bytes
+    MAG_Config_t        mag_cfg;            // reg offset =  25(0x19), len = 55 Bytes
+    IMU_Config_t        imu_cfg;            // reg offset =  80(0x50), len = 52 Bytes
+    LED_Config_t        led_cfg;            // reg offset = 132(0x84), len = 14 Bytes
+    uint16_t            cfg_crc16;          // reg offset = 146(0x92), len =  2 Bytes
     // read-only registers
-    uint32_t            UID32;              // reg offset = 78(0x4E), len =  4 Bytes
-    uint8_t             mag_sensor_DRDY;    // reg offset = 82(0x52), len =  1 Bytes
-    uint8_t             rm3100_DRDY;        // reg offset = 83(0x53), len =  1 Bytes
-    uint64_t            timestamp;          // reg offset = 84(0x54), len =  8 Bytes      // timestamp in us when RM3100 finishes measurement
-    int32_t             magADC[3];          // reg offset = 92(0x5C), len = 12 Bytes      // Raw magnetometer readings, in LSB counts
-    uint8_t             magADC_CRC;         // CRC-8 for magADC data, Motorola, polinomial x^8+x^5+x^4+x^0 (0x31 0b100110001)
-    float               magVal[3];          // reg offset =105(0x69), len = 12 Bytes      // Calibrated magnet-field intensity, in uT
-    uint8_t             magVal_CRC;         // CRC-8 for magVal data, Motorola, polinomial x^8+x^5+x^4+x^0 (0x31 0b100110001)
-    float               magVal_t;           // reg offset =118(0x76), len = 4 Bytes       // Calibrated magnet-field total intensity, in uT
-    float               magStd;             // reg offset =122(0x7A), len = 4 Bytes       // standard deviation of the magnetic field total intensity
-} MAG_SENSOR_module_t; // size: 126 Bytes
+    SENSOR_Data_t       sensor_data;        // reg offset = 148(0x94), len = 17 Bytes
+    MAG_Data_t          mag_data;           // reg offset = 165(0xA5), len = 40 Bytes
+    IMU_Data_t          imu_data;           // reg offset = 205(0xCD), len = 50 Bytes
+} MY_SENSOR_module_t; // size: 255 Bytes
 
 #pragma pack() //align memory allocation with default strategy
 
 extern volatile double mcu_timestamp;
 extern volatile uint32_t TIM2_time_s;
 extern uint8_t sensor_num;
-extern MAG_SENSOR_module_t mag_sensor[];
+extern MY_SENSOR_module_t mag_sensor[];
 extern uint8_t slaveID_tba;
 extern uint32_t slaveID_map[];
 extern uint8_t PC_Trans_Buff[1024];
@@ -125,7 +204,7 @@ extern uint32_t sensor_err_pkg_cnt;
  * @retval HAL_OK
  * @retval HAL_ERROR
  */
-HAL_StatusTypeDef Get_MagSensor_Config(MAG_SENSOR_module_t *sensor);
+HAL_StatusTypeDef Get_MagSensor_Config(MY_SENSOR_module_t *sensor);
 
  /**
  * @brief  写单个传感器配置FULL_CFG_t
