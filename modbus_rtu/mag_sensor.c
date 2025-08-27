@@ -232,7 +232,7 @@ HAL_StatusTypeDef Get_DataReady(void){
 }
 
 uint8_t PC_Trans_Buff[1024] = {0};
-uint16_t PC_TRANS_Assemble(void)
+uint16_t PC_TRANS_Assemble(double PC_TRANS_timestamp)
 {
     // volatile uint32_t temp;
     uint16_t mag_idx = 0;
@@ -275,8 +275,7 @@ uint16_t PC_TRANS_Assemble(void)
     // mag sensor num
     PC_Trans_Buff[ptr++] = sensor_num;
     // mag sensor timestamp
-    // double mcu_timestamp = 123.456;
-    memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&mcu_timestamp, 8);
+    memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&PC_TRANS_timestamp, 8);
     ptr += 8;
 
     for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
