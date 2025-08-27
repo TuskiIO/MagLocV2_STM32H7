@@ -124,7 +124,7 @@ HAL_StatusTypeDef Set_MagSensor_Config(uint8_t *RS485_buf){
     state = Modbus_CMD51_WriteBytes(RS485_buf[0], RS485_buf[1], RS485_buf[2], &RS485_buf[3]);
 
     osDelay(500);
-    
+
     if(state != HAL_OK){
         //Handle error
         return HAL_ERROR;
@@ -205,6 +205,31 @@ double Update_TimeStamp(void) {
     return mcu_timestamp;
 }
 
+HAL_StatusTypeDef Get_DataReady(void){
+    uint8_t sensor_1_datardy = 0;
+    uint8_t sensor_index = 0;
+    uint16_t datardy_timeout_cnt = 0;
+
+    while(sensor_1_datardy != 1){
+      //wait data ready
+      HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(
+        mag_sensor[sensor_index].sensor_pub_cfg.mb_slave_id, 
+        offsetof(MY_SENSOR_module_t, sensor_data) + offsetof(SENSOR_Data_t,sensor_DRDY), 
+        0x01, 
+        &sensor_1_datardy
+      );
+      if(state == HAL_TIMEOUT){
+        sensor_index++;
+        if(sensor_index>=sensor_num)
+            return HAL_ERROR;
+      }
+      datardy_timeout_cnt++;
+      if(datardy_timeout_cnt>10000){
+        return HAL_TIMEOUT;
+      }
+    }
+    return HAL_OK;
+}
 
 uint8_t PC_Trans_Buff[1024] = {0};
 uint16_t PC_TRANS_Assemble(void)

@@ -265,6 +265,14 @@ uint16_t PC_TRANS_Assemble(void);
  */
  double Update_TimeStamp(void);
 
+ /**
+ * @brief  获取data ready
+ * @retval HAL_OK       收到data ready
+ * @retval HAL_TIMEOUT  未收到data ready
+ * @retval HAL_ERROR    未检测到传感器
+ */
+HAL_StatusTypeDef Get_DataReady(void);
+
  void Init_SlaveID_Map(void);
  uint8_t Find_Free_SlaveID(void);
 

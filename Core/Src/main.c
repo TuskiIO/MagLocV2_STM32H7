@@ -990,7 +990,33 @@ void StartModbusTask(void *argument)
     osDelay(1);
   }
 
+  #if USE_MAG_SENSOR_DRDY
+  Update_TimeStamp();
+  Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
+  Get_DataReady();  //need to handle TIMEOUT and ERROR
+  #endif
+
   for (;;){
+    #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
+    Update_TimeStamp();
+    Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
+
+    #if !(USE_MAG_SENSOR_DRDY)
+    osDelay(5);
+    #endif
+
+    Get_MagSensors_Data();
+    //send to PC
+    // usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
+    PC_buf_size = PC_TRANS_Assemble();
+    // CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
+    do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, PC_buf_size);
+
+    #if USE_MAG_SENSOR_DRDY
+    Get_DataReady();
+    #endif
+    #endif
+
     #if GET_SET_CONFIG_OF_SENSORS
     if(udp_set_sensor_cfg_flag == 1){
       PC_Trans_Buff[0] = 0x55;
@@ -1047,23 +1073,7 @@ void StartModbusTask(void *argument)
     }
     #endif
 
-    #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
-    Update_TimeStamp();
-    Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
-    #if !(USE_MAG_SENSOR_DRDY)
-    // TickType_t xStartTime = xTaskGetTickCount();
-    osDelay(5);
-    // TickType_t xEndTime = xTaskGetTickCount();
-    // usb_printf("real delay time of osDelay5: %d\n", xEndTime-xStartTime);
-    #endif
-    Get_MagSensors_Data();
-    //send to PC
-    // usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
-    PC_buf_size = PC_TRANS_Assemble();
-    // CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
-    do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, PC_buf_size);
-    #endif
-
+    //LED flash
     led_cnt++;
     if(led_cnt > 100 ){
       HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
