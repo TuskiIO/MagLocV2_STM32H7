@@ -73,7 +73,7 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
                 continue;
             }
             //分配成功
-            mag_sensor[sensor_num].sensor_cfg.mb_slave_id = slaveID_tba;
+            mag_sensor[sensor_num].sensor_pub_cfg.mb_slave_id = slaveID_tba;
             #if USE_USB_PRINTF
             usb_printf("Sensor index: %d; SlaveID: %x\n", sensor_num, slaveID_tba);
             #endif
@@ -104,7 +104,7 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
 
 HAL_StatusTypeDef Get_MagSensor_Config(MY_SENSOR_module_t *sensor){
     //get config
-    if(Modbus_CMD50_ReadBytes(sensor->sensor_cfg.mb_slave_id, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_CONFIG_LENGTH, (uint8_t*)&sensor->sensor_cfg) != HAL_OK){
+    if(Modbus_CMD50_ReadBytes(sensor->sensor_pub_cfg.mb_slave_id, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_FULL_CONFIG_LENGTH, (uint8_t*)&sensor->sensor_pub_cfg) != HAL_OK){
         //Handle error 
         return HAL_ERROR;
     }
@@ -112,16 +112,19 @@ HAL_StatusTypeDef Get_MagSensor_Config(MY_SENSOR_module_t *sensor){
 }
 
 
-HAL_StatusTypeDef Set_MagSensor_Config(uint8_t slaveID, FULL_CFG_t *new_full_cfg){
+HAL_StatusTypeDef Set_MagSensor_Config(uint8_t *RS485_buf){
     HAL_StatusTypeDef state;
-    if(slaveID == MB_Broadcast_ID){
-        return HAL_ERROR;
+    if(RS485_buf[0] == MB_Broadcast_ID){
+        //if private config is included
+        if(RS485_buf[1]+RS485_buf[2] > MAG_SENSOR_PUBLIC_CONFIG_LENGTH){
+            return HAL_ERROR;
+        }
         //state = Modbus_CMD51_WriteBytes(MB_Broadcast_ID, MAG_SENSOR_CONFIG_OFFSET + 1, MAG_SENSOR_CONFIG_LENGTH - 1, ((uint8_t*)new_full_cfg)+1);
     }
-    else{
-        state = Modbus_CMD51_WriteBytes(slaveID, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_CONFIG_LENGTH, (uint8_t*)new_full_cfg);
-    }
+    state = Modbus_CMD51_WriteBytes(RS485_buf[0], RS485_buf[1], RS485_buf[2], &RS485_buf[3]);
+
     osDelay(500);
+    
     if(state != HAL_OK){
         //Handle error
         return HAL_ERROR;
@@ -146,7 +149,7 @@ HAL_StatusTypeDef Get_MagSensors_Data(void){
 
     for(uint8_t i=0; i<sensor_num; i++){
         #if ONLY_GET_SENSOR_MAGVAL  //only get magVal[3]
-        HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].sensor_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET);
+        HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].sensor_pub_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET);
         #else                       // get all data
         HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET);
         #endif 
@@ -174,7 +177,7 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
             //分配slaveID_map
             SET_SLAVEID_MAP(temp_slaveID);
             //记录slaveID
-            mag_sensor[sensor_num].sensor_cfg.mb_slave_id = temp_slaveID;
+            mag_sensor[sensor_num].sensor_pub_cfg.mb_slave_id = temp_slaveID;
             sensor_num++;
             #if USE_USB_PRINTF
             usb_printf("Sensor index: %d; SlaveID: %x\n", sensor_num, temp_slaveID);
@@ -252,7 +255,7 @@ uint16_t PC_TRANS_Assemble(void)
     ptr += 8;
 
     for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
-        PC_Trans_Buff[ptr++] = mag_sensor[mag_idx].sensor_cfg.mb_slave_id;
+        PC_Trans_Buff[ptr++] = mag_sensor[mag_idx].sensor_pub_cfg.mb_slave_id;
         for(uint8_t i = 0; i<3; i++){
             //assemble float magVal[3]
             memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&mag_sensor[mag_idx].mag_data.magVal[i], 4);

@@ -775,10 +775,13 @@ static uint8_t udp_get_sensor_cfg_flag = 0;
 
 /**
  *udp cmd list:
- * CMD 0x00: set sensor config, set all if mb_id == 0x00
- * | 0x55 | 0xBB | 0x00 | [FULL_CFG_t] | 
- * CMD 0X01: read sensor config
- * | 0x55 | 0xBB | 0x01 | modbus_slave_ID |
+ * CMD 0X00: read sensor config
+ * | 0x55 | 0xBB | 0x00 | modbus_slave_ID |
+ * CMD 0x01: set sensor register, set all if modbus_slave_ID == 0x00
+ * | 0x55 | 0xBB | 0x01 | modbus_slave_ID | Start_reg | Length(uint8_t) | [data]
+ * 
+ * success: return 55 AA FF + [raw frame] | CRC
+ * fail:    return 55 AA FF 00 00 00 | CRC
  */
 void example_recv_udp(void *arg, void* data, u32_t recv_len)
 {
@@ -792,15 +795,15 @@ void example_recv_udp(void *arg, void* data, u32_t recv_len)
 
     if(udp_recv_buf[0] == 0x55 && udp_recv_buf[1] == 0xBB){
       #if GET_SET_CONFIG_OF_SENSORS
-      if(udp_recv_buf[2] == 0x00){
-        //set config
-        memcpy(udp_to_485_buf, &udp_recv_buf[3], sizeof(FULL_CFG_t));
-        udp_set_sensor_cfg_flag = 1;
-      }
-      if(udp_recv_buf[2] == 0x01){
-        //get config
-        udp_to_485_buf[0] = udp_recv_buf[3];
-        udp_get_sensor_cfg_flag = 1;
+      switch(udp_recv_buf[2]){
+        case 0x00:    //get config
+          udp_to_485_buf[0] = udp_recv_buf[3];
+          udp_get_sensor_cfg_flag = 1;
+          break;
+        case 0x01:    //set config
+          memcpy(udp_to_485_buf, &udp_recv_buf[3], udp_recv_buf[5]+3);
+          udp_set_sensor_cfg_flag = 1;
+          break;
       }
       #endif
     }
@@ -869,7 +872,7 @@ void StartDefaultTask(void *argument)
     if(key1_pressed){
       usb_printf("Sensor_num: %d\r\n", sensor_num);
       for(uint8_t i=0; i<sensor_num; i++){
-        usb_printf("sensor[%d]: 0x%X, ", i, mag_sensor[i].sensor_cfg.mb_slave_id);
+        usb_printf("sensor[%d]: 0x%X, ", i, mag_sensor[i].sensor_pub_cfg.mb_slave_id);
       }
       usb_printf("\r\n");
       usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\r\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
@@ -990,28 +993,56 @@ void StartModbusTask(void *argument)
   for (;;){
     #if GET_SET_CONFIG_OF_SENSORS
     if(udp_set_sensor_cfg_flag == 1){
-      //send config to sensors
-      Set_MagSensor_Config(udp_to_485_buf[0],(FULL_CFG_t*)udp_to_485_buf);
-      udp_set_sensor_cfg_flag = 0;
-    }
-    if(udp_get_sensor_cfg_flag == 1){
-      uint8_t temp_sensor_NO = 0;
-      //send config to sensors
-      for(uint8_t i=0; i<sensor_num; i++){
-        if(mag_sensor[i].sensor_cfg.mb_slave_id == udp_to_485_buf[0]){
-          temp_sensor_NO = i;
-          break;
-        }
-      }
-      Get_MagSensor_Config(&mag_sensor[temp_sensor_NO]);
       PC_Trans_Buff[0] = 0x55;
       PC_Trans_Buff[1] = 0xaa;
       PC_Trans_Buff[2] = 0xff;
-      memcpy(&PC_Trans_Buff[3], (uint8_t *)&mag_sensor[temp_sensor_NO].sensor_cfg, sizeof(FULL_CFG_t));
-      uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, sizeof(FULL_CFG_t)+3);
-      PC_Trans_Buff[sizeof(FULL_CFG_t)+3] = (crc16      ) & 0xff;
-      PC_Trans_Buff[sizeof(FULL_CFG_t)+4] = (crc16 >>  8) & 0xff;
-      do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, sizeof(FULL_CFG_t)+5);
+      //send config to sensors
+      if(Set_MagSensor_Config(udp_to_485_buf) == HAL_OK){
+        //udp send something
+        memcpy(&PC_Trans_Buff[3], udp_to_485_buf, udp_to_485_buf[2] + 6);
+        uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, udp_to_485_buf[2]+6);
+        PC_Trans_Buff[udp_to_485_buf[2] + 6] = (crc16      ) & 0xff;
+        PC_Trans_Buff[udp_to_485_buf[2] + 7] = (crc16 >>  8) & 0xff;
+        do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, udp_to_485_buf[2] + 8);
+      }
+      else{
+        PC_Trans_Buff[3] = 0x00;
+        PC_Trans_Buff[4] = 0x00;
+        PC_Trans_Buff[5] = 0x00;
+        uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, 0x06);
+        PC_Trans_Buff[6] = (crc16      ) & 0xff;
+        PC_Trans_Buff[7] = (crc16 >>  8) & 0xff;
+        do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, 8);
+      }
+
+      udp_set_sensor_cfg_flag = 0;
+    }
+
+    if(udp_get_sensor_cfg_flag == 1){
+      //send config to sensors
+      for(uint8_t i=0; i<sensor_num; i++){
+        if(udp_to_485_buf[0] == mag_sensor[i].sensor_pub_cfg.mb_slave_id || udp_to_485_buf[0] == MB_Broadcast_ID){
+          PC_Trans_Buff[0] = 0x55;
+          PC_Trans_Buff[1] = 0xaa;
+          PC_Trans_Buff[2] = 0xff;
+          if(Get_MagSensor_Config(&mag_sensor[i]) == HAL_OK){
+            memcpy(&PC_Trans_Buff[3], (uint8_t *)&mag_sensor[i].sensor_pub_cfg, sizeof(FULL_CFG_t));
+            uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, sizeof(FULL_CFG_t)+3);
+            PC_Trans_Buff[sizeof(FULL_CFG_t)+3] = (crc16      ) & 0xff;
+            PC_Trans_Buff[sizeof(FULL_CFG_t)+4] = (crc16 >>  8) & 0xff;
+            do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, sizeof(FULL_CFG_t)+5);
+          }
+          else{
+            PC_Trans_Buff[3] = 0x00;
+            PC_Trans_Buff[4] = 0x00;
+            PC_Trans_Buff[5] = 0x00;
+            uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, 0x06);
+            PC_Trans_Buff[6] = (crc16      ) & 0xff;
+            PC_Trans_Buff[7] = (crc16 >>  8) & 0xff;
+            do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, 8);
+          }
+        }
+      }
       udp_get_sensor_cfg_flag = 0;
     }
     #endif

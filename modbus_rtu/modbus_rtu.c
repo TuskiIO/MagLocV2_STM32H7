@@ -194,8 +194,7 @@ HAL_StatusTypeDef Modbus_CMD51_WriteBytes(uint8_t slaveId, uint8_t start_reg, ui
     }
 
     /* 简单对比响应与请求是否一致 */
-    if (memcmp(txFrame, rxFrame, txLen) != 0)
-    {
+    if (memcmp(txFrame, rxFrame, txLen) != 0){
         return HAL_ERROR;
     }
     return HAL_OK;
