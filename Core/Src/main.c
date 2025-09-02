@@ -771,20 +771,24 @@ static uint8_t udp_recv_buf[1024] = {0};
 static uint8_t udp_to_485_buf[1024] = {0};
 static uint8_t udp_set_sensor_cfg_flag = 0;
 static uint8_t udp_get_sensor_cfg_flag = 0;
+static uint8_t udp_get_sensor_data_flag = 1;
 // static uint8_t udp_to_485_len = 0;
 
 /**
  *udp cmd list:
- * CMD 0X00: read sensor config
- * | 0x55 | 0xBB | 0x00 | modbus_slave_ID |
- * CMD 0x01: set sensor register, set all if modbus_slave_ID == 0x00
- * | 0x55 | 0xBB | 0x01 | modbus_slave_ID | Start_reg | Length(uint8_t) | [data]
+ * CMD 0X00: pause getting sensor data
+ * | 0x55 | 0xBB | 0x00 |
+ * CMD 0x01: continue getting sensor data
+ * | 0x55 | 0xBB | 0x01 |
+ * CMD 0X02: read sensor config
+ * | 0x55 | 0xBB | 0x02 | modbus_slave_ID |
+ * CMD 0x03: set sensor register, set all if modbus_slave_ID == 0x00
+ * | 0x55 | 0xBB | 0x03 | modbus_slave_ID | Start_reg | Length(uint8_t) | [data]
  * 
  * success: return 55 AA FF + [raw frame] | CRC
  * fail:    return 55 AA FF 00 00 00 | CRC
  */
-void example_recv_udp(void *arg, void* data, u32_t recv_len)
-{
+void example_recv_udp(void *arg, void* data, u32_t recv_len){
   UNUSED(arg);
   if(data != NULL){
     // usb_printf("udp_recv: %s\n", (const char*)data);
@@ -796,11 +800,17 @@ void example_recv_udp(void *arg, void* data, u32_t recv_len)
     if(udp_recv_buf[0] == 0x55 && udp_recv_buf[1] == 0xBB){
       #if GET_SET_CONFIG_OF_SENSORS
       switch(udp_recv_buf[2]){
-        case 0x00:    //get config
+        case 0x00:    //pause getting sensor data
+          udp_get_sensor_data_flag = 0;
+          break;
+        case 0x01:    //continue getting sensor data
+          udp_get_sensor_data_flag = 1;
+          break;
+        case 0x02:    //get config
           udp_to_485_buf[0] = udp_recv_buf[3];
           udp_get_sensor_cfg_flag = 1;
           break;
-        case 0x01:    //set config
+        case 0x03:    //set config
           memcpy(udp_to_485_buf, &udp_recv_buf[3], udp_recv_buf[5]+3);
           udp_set_sensor_cfg_flag = 1;
           break;
@@ -997,31 +1007,35 @@ void StartModbusTask(void *argument)
   Get_DataReady();  //need to handle TIMEOUT and ERROR
   #endif
 
+  udp_get_sensor_data_flag = 1;
+
   for (;;){
     #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
-    Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
-    Update_TimeStamp();
+    if(udp_get_sensor_data_flag == 1){
+      Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
+      Update_TimeStamp();
 
-    #if !(USE_MAG_SENSOR_DRDY)
-    osDelay(5);
-    #endif
+      #if !(USE_MAG_SENSOR_DRDY)
+      osDelay(5);
+      #endif
 
-    Get_MagSensors_Data();
-    //send to PC
-    // usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
-    
-    #if USE_MAG_SENSOR_DRDY
-    PC_buf_size = PC_TRANS_Assemble(mcu_last_timestamp);
-    mcu_last_timestamp = mcu_timestamp;
-    #else
-    PC_buf_size = PC_TRANS_Assemble(mcu_timestamp);
-    #endif
-    // CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
-    do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, PC_buf_size);
+      Get_MagSensors_Data();
+      //send to PC
+      // usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
+      
+      #if USE_MAG_SENSOR_DRDY
+      PC_buf_size = PC_TRANS_Assemble(mcu_last_timestamp);
+      mcu_last_timestamp = mcu_timestamp;
+      #else
+      PC_buf_size = PC_TRANS_Assemble(mcu_timestamp);
+      #endif
+      // CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
+      do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, PC_buf_size);
 
-    #if USE_MAG_SENSOR_DRDY
-    Get_DataReady();
-    #endif
+      #if USE_MAG_SENSOR_DRDY
+      Get_DataReady();
+      #endif
+    }
     #endif
 
     #if GET_SET_CONFIG_OF_SENSORS
