@@ -150,7 +150,7 @@ HAL_StatusTypeDef Get_MagSensors_Data(void){
     for(uint8_t i=0; i<sensor_num; i++){
         #if ONLY_GET_SENSOR_MAGVAL  //only get magVal[3]
         HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].sensor_pub_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET);
-        #else                       // get all data
+        #else                       //get all data
         HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET);
         #endif 
         if(state != HAL_OK){
@@ -310,7 +310,7 @@ uint16_t PC_TRANS_Assemble(double PC_TRANS_timestamp)
     //         PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
     //         PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
     //         PC_Trans_Buff[ptr++] = (temp >>  8) & 0xff;
-    //         PC_Trans_Buff[ptr++] = (temp      ) & 0xff;
+    //         PC_Trans_Buff[ptr++] = (temp      ) & 0xff; 
     //     }
     // }
     // return ptr;
