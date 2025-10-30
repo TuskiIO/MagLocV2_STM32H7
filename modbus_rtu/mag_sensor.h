@@ -24,8 +24,6 @@
 #define MAG_SENSOR_DATA_OFFSET          148
 #define MAG_SENSOR_DATA_LENGTH          107  //255-148
 
-#define MAG_SENSOR_MAGADC_OFFSET    92
-#define MAG_SENSOR_MAGVAL_OFFSET    105
 
 #define GET_SLAVEID_MAP(idx)    ((slaveID_map[(idx) >> 5] >> ((idx) & 0x1F)) & 0x01)
 #define SET_SLAVEID_MAP(idx)    (slaveID_map[(idx) >> 5] |= (1U << ((idx) & 0x1F)))

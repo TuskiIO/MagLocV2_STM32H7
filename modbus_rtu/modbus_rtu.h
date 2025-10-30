@@ -9,6 +9,8 @@
 #define RX485_TX_USE_DMA            1
 #define RS485_RX_USE_RTOS_SEMAPHORE 0
 
+#define USB_TO_RS485_MODE           0
+
 #define MB_Broadcast_ID 0x00
 #define MB_Temp_ID 0xF7
 #define MB_MAX_ID 0xF7      //range:0xE1~0XFF(225~255)

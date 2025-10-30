@@ -1,4 +1,5 @@
 #include "mag_sensor.h"
+#include "cmsis_gcc.h"
 #include "modbus_rtu.h"
 #include "usbd_cdc_if.h"
 #include "cmsis_os.h"
@@ -149,12 +150,18 @@ HAL_StatusTypeDef Get_MagSensors_Data(void){
 
     for(uint8_t i=0; i<sensor_num; i++){
         #if ONLY_GET_SENSOR_MAGVAL  //only get magVal[3]
-        HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].sensor_pub_cfg.mb_slave_id, MAG_SENSOR_MAGVAL_OFFSET, 12, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_MAGVAL_OFFSET);
+        HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(
+            mag_sensor[i].sensor_pub_cfg.mb_slave_id,
+            offsetof(MY_SENSOR_module_t, mag_data) + offsetof(MAG_Data_t, magVal),
+            12,
+            (uint8_t *)&mag_sensor[i].mag_data.magVal
+        );
         #else                       //get all data
         HAL_StatusTypeDef state = Modbus_CMD50_ReadBytes(mag_sensor[i].sensor_cfg.mb_slave_id, MAG_SENSOR_DATA_OFFSET, MAG_SENSOR_DATA_LENGTH, (uint8_t*)&mag_sensor[i]+MAG_SENSOR_DATA_OFFSET);
         #endif 
         if(state != HAL_OK){
             sensor_err_pkg_cnt++;
+            __NOP();
             continue;
         }
         sensor_pkg_cnt++;
@@ -170,6 +177,7 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
     sensor_num = 0;
     Init_SlaveID_Map();
 
+    //这里改成问whoami
     //轮询确认已有的slaveID
     for(uint8_t i=1; i<MB_MAX_ID; i++){
         HAL_StatusTypeDef state=Modbus_CMD50_ReadBytes(i, 0x00, 0x01, &temp_slaveID);
@@ -179,6 +187,7 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
             //记录slaveID
             mag_sensor[sensor_num].sensor_pub_cfg.mb_slave_id = temp_slaveID;
             sensor_num++;
+            osDelay(1);
             #if USE_USB_PRINTF
             usb_printf("Sensor index: %d; SlaveID: %x\n", sensor_num, temp_slaveID);
             #endif
@@ -187,6 +196,7 @@ HAL_StatusTypeDef Check_MagSensors_SlaveID(void){
             //出现冲突，地址配置为0xF7
             RESET_SLAVEID_MAP(temp_slaveID);
             temp_slaveID = MB_Temp_ID;
+            osDelay(1);
             Modbus_CMD51_WriteBytes(i, 0x00, 0x01, &temp_slaveID);
             #if USE_USB_PRINTF
             usb_printf("SlaveID Conflict: %x\n", temp_slaveID);

@@ -972,6 +972,9 @@ void StartModbusTask(void *argument)
   HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, rx_buf, RX_BUF_SIZE);
   __HAL_DMA_DISABLE_IT(&hdma_lpuart1_rx, DMA_IT_HT);
 
+  // wait for sensors power stable
+  osDelay(1000);
+
   mcu_timestamp = 0;
   TIM2_time_s = 0;
   sensor_pkg_cnt = 0;
@@ -1145,7 +1148,7 @@ void MPU_Config(void)
 
   /** Initializes and configures the Region and the memory to be protected
   */
-  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE; 
   MPU_InitStruct.Number = MPU_REGION_NUMBER0;
   MPU_InitStruct.BaseAddress = 0x0;
   MPU_InitStruct.Size = MPU_REGION_SIZE_4GB;

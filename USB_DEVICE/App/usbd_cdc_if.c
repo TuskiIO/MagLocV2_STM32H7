@@ -265,7 +265,9 @@ static int8_t CDC_Control_HS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_HS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 11 */
+  #if USB_TO_RS485_MODE
   HAL_UART_Transmit(&hlpuart1, Buf, *Len, 100);
+  #endif
   // CDC_Transmit_HS(Buf,*Len);
 
   USBD_CDC_SetRxBuffer(&hUsbDeviceHS, &Buf[0]);
