@@ -288,17 +288,18 @@ uint16_t PC_TRANS_Assemble(double PC_TRANS_timestamp)
     memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&PC_TRANS_timestamp, 8);
     ptr += 8;
 
+    // mag sensor error pkg percentage
+    float temp_sensor_error_pkg_percentage = ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt);
+    memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&temp_sensor_error_pkg_percentage, 4);
+    ptr += 4;
+
+    // mag sensor data
     for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
         PC_Trans_Buff[ptr++] = mag_sensor[mag_idx].sensor_pub_cfg.mb_slave_id;
         for(uint8_t i = 0; i<3; i++){
             //assemble float magVal[3]
             memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&mag_sensor[mag_idx].mag_data.magVal[i], 4);
             ptr += 4;
-            // memcpy((uint8_t *)&temp, (uint8_t *)&mag_sensor[mag_idx].magVal[i], 4);
-            // PC_Trans_Buff[ptr++] = (temp >> 24) & 0xff;
-            // PC_Trans_Buff[ptr++] = (temp >> 16) & 0xff;
-            // PC_Trans_Buff[ptr++] = (temp >>  8) & 0xff;
-            // PC_Trans_Buff[ptr++] = (temp      ) & 0xff;
         }
     }
     uint16_t crc16 = HAL_CRC_Calculate(&hcrc, (uint32_t *)PC_Trans_Buff, ptr);

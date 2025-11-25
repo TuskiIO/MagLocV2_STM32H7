@@ -30,6 +30,8 @@
 #include "modbus_rtu.h"
 #include "mag_sensor.h"
 #include "ICM42688P.h"
+#include <stdint.h>
+#include <string.h>
 // #include "sensor_DHCP.h"
 // #include "config.h"
 /* USER CODE END Includes */
@@ -980,6 +982,7 @@ void StartModbusTask(void *argument)
   sensor_pkg_cnt = 0;
   sensor_err_pkg_cnt  = 0;
 
+  #if !(USB_TO_RS485_MODE)
   #if RESET_ALL_SLAVE_ID_WHEN_RESET
   uint8_t temp_slaveID = MB_Temp_ID;
   Modbus_CMD51_WriteBytes(MB_Broadcast_ID, 0x00, 0x01, &temp_slaveID);
@@ -997,6 +1000,18 @@ void StartModbusTask(void *argument)
   };
   #endif
 
+  //配置传感器config
+  uint8_t tempbuff[5];
+  //设置传感器波特率.
+  uint32_t tempbaudrate = 2000000;
+  memcpy((void *restrict)&tempbuff[0], (const void *restrict)&tempbaudrate, sizeof(tempbaudrate));
+  //设置传感器采样模式. 0x00:Continuous Mode, 0x01:On Trigger Mode.
+  tempbuff[4] = 0x01;
+
+  Modbus_CMD51_WriteBytes(MB_Broadcast_ID, 0x01, 0x05,tempbuff);
+  osDelay(500);
+  
+
   //更新配置
   for(uint8_t i=0; i<sensor_num; i++){
     Get_MagSensor_Config(&mag_sensor[i]);
@@ -1008,6 +1023,7 @@ void StartModbusTask(void *argument)
   Update_TimeStamp();
   double mcu_last_timestamp = mcu_timestamp;
   Get_DataReady();  //need to handle TIMEOUT and ERROR
+  #endif
   #endif
 
   udp_get_sensor_data_flag = 1;
