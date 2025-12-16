@@ -105,7 +105,7 @@ HAL_StatusTypeDef Get_MagSensors_Plugged(void){
 
 HAL_StatusTypeDef Get_MagSensor_Config(MY_SENSOR_module_t *sensor){
     //get config
-    if(Modbus_CMD50_ReadBytes(sensor->sensor_pub_cfg.mb_slave_id, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_FULL_CONFIG_LENGTH, (uint8_t*)&sensor->sensor_pub_cfg) != HAL_OK){
+    if(Modbus_CMD50_ReadBytes(sensor->sensor_pub_cfg.mb_slave_id, MAG_SENSOR_CONFIG_OFFSET, MAG_SENSOR_FULL_CONFIG_LENGTH + sizeof(SENSOR_Data_t), (uint8_t*)&sensor->sensor_pub_cfg) != HAL_OK){
         //Handle error 
         return HAL_ERROR;
     }
@@ -296,6 +296,8 @@ uint16_t PC_TRANS_Assemble(double PC_TRANS_timestamp)
     // mag sensor data
     for (mag_idx = 0; mag_idx < sensor_num; mag_idx++){
         PC_Trans_Buff[ptr++] = mag_sensor[mag_idx].sensor_pub_cfg.mb_slave_id;
+        memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&mag_sensor[mag_idx].sensor_data.UID32, 4);
+        ptr += 4;
         for(uint8_t i = 0; i<3; i++){
             //assemble float magVal[3]
             memcpy((uint8_t *)(PC_Trans_Buff+ptr), (uint8_t *)&mag_sensor[mag_idx].mag_data.magVal[i], 4);

@@ -92,6 +92,7 @@ uint8_t key1_pressed = 0;
 uint8_t key2_pressed = 0;
 uint8_t key3_pressed = 0;
 struct udp_pcb* pcb;
+//struct udp_pcb* pcb_cmd;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -1000,16 +1001,16 @@ void StartModbusTask(void *argument)
   };
   #endif
 
-  //配置传感器config
-  uint8_t tempbuff[5];
-  //设置传感器波特率.
-  uint32_t tempbaudrate = 2000000;
-  memcpy((void *restrict)&tempbuff[0], (const void *restrict)&tempbaudrate, sizeof(tempbaudrate));
-  //设置传感器采样模式. 0x00:Continuous Mode, 0x01:On Trigger Mode.
-  tempbuff[4] = 0x01;
+  // //配置传感器config
+  // uint8_t tempbuff[5];
+  // //设置传感器波特率.
+  // uint32_t tempbaudrate = 2000000;
+  // memcpy((void *restrict)&tempbuff[0], (const void *restrict)&tempbaudrate, sizeof(tempbaudrate));
+  // //设置传感器采样模式. 0x00:Continuous Mode, 0x01:On Trigger Mode.
+  // tempbuff[4] = 0x01;
 
-  Modbus_CMD51_WriteBytes(MB_Broadcast_ID, 0x01, 0x05,tempbuff);
-  osDelay(500);
+  // Modbus_CMD51_WriteBytes(MB_Broadcast_ID, 0x01, 0x05,tempbuff);
+  // osDelay(500);
   
 
   //更新配置
