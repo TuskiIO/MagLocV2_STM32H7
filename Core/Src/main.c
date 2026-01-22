@@ -957,8 +957,8 @@ void StartModbusTask(void *argument)
 
   for (;;){
     #if GET_MAGSENSOR_DATA  //get sensor data->trigger measure and mark the time
-    Update_TimeStamp();
     Modbus_CMD60_TriggerMeasurement(MB_Broadcast_ID);
+    Update_TimeStamp();
     #if !(USE_MAG_SENSOR_DRDY)
     // TickType_t xStartTime = xTaskGetTickCount();
     osDelay(5);
@@ -968,7 +968,7 @@ void StartModbusTask(void *argument)
     Get_MagSensors_Data();
     //send to PC
     // usb_printf("Time Stamp: %.1lf, Total Expected Pkg: %d, Error Pkg cnt: %d, Error Percentage: %.2f/10K.\n", mcu_timestamp, sensor_pkg_cnt, sensor_err_pkg_cnt, ((10000.0*sensor_err_pkg_cnt)/sensor_pkg_cnt));
-    PC_buf_size = PC_TRANS_Assemble();
+    PC_buf_size = PC_TRANS_Assemble(mcu_timestamp);
     // CDC_Transmit_HS(PC_Trans_Buff, PC_buf_size);
     do_udp_send(pcb, remote_ip, 6002, (void*)PC_Trans_Buff, PC_buf_size);
     #endif

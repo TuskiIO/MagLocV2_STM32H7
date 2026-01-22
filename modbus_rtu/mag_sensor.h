@@ -150,9 +150,10 @@ HAL_StatusTypeDef Set_MagSensors_Config(MAG_SENSOR_module_t *sensor);
 
 /**
  * @brief  将sensor_num个传感器数据打包
- * @retval PC_Trans_Buff包长       
+ * @param  PC_TRANS_timestamp: 发送的时间戳
+ * @retval PC_Trans_Buff包长
  */
-uint16_t PC_TRANS_Assemble(void);
+uint16_t PC_TRANS_Assemble(double PC_TRANS_timestamp);
 
 /**
  * @brief  更新timestamp    
